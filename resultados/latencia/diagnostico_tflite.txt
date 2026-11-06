@@ -1,0 +1,18 @@
+Diagnostico de la latencia de TFLite (7/10/2026, Janetbackbone TM 0, 1 hilo en TF y TFLite)
+Script: diagnostico_tflite.py (ejecutado con la fase 'milp' del paso 8 en marcha: los valores
+absolutos estan algo inflados; lo relevante es la comparacion entre filas).
+
+tamanos K*E de los 6 estados usados: [1620, 2250, 1980, 540, 1980, 1980]
+TF           mismo tamano:  27.19 ms | tamanos alternos:  30.17 ms
+TFLite_FP32  mismo tamano:  82.17 ms | tamanos alternos:  91.42 ms
+TFLite solo invoke():       81.18 ms   (sin copiar entradas ni redimensionar)
+
+Operaciones del modelo TFLite (8 iteraciones desplegadas, ~310 operaciones):
+MUL 60, ADD 48, FULLY_CONNECTED 41, SUB 28, GATHER 16, LOGISTIC 16, MEAN 16, GREATER 12, EXP 12,
+SELECT_V2 12, SPLIT_V 8, CONCATENATION 8, UNSORTED_SEGMENT_SUM 8, SPLIT 8, TANH 8,
+SQUARED_DIFFERENCE 8, RSQRT 8, SEGMENT_SUM 1
+
+Conclusion: ni el numero de hilos ni el redimensionado del interprete explican la lentitud.
+Con el mismo tamano de entrada, la ejecucion del grafo (invoke) ya es ~3 veces mas lenta que
+TensorFlow en modo grafo: SELU, LayerNorm y GRU quedan descompuestas en muchas operaciones
+elementales que el interprete ejecuta una a una, con su propio buffer intermedio.

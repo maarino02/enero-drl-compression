@@ -1,0 +1,37 @@
+{
+  "argumentos": {
+    "g": "Sanet",
+    "f": "../datasets/results-1-link_capacity-unif-05-1/results_zoo/Sanet",
+    "orig": "./modelsProbando/ckpt_ACT-172",
+    "model": [
+      [
+        "Podado50",
+        "pruned",
+        "./modelsPrunedV2/ckpt_PRUNED_s50_BEST-1"
+      ],
+      [
+        "Podado90",
+        "pruned",
+        "./modelsPrunedV2_90/ckpt_PRUNED_s90_BEST-1"
+      ],
+      [
+        "INT8_dinamico",
+        "tflite",
+        "./modelsCompressed_v2/actor_dinamico.tflite"
+      ]
+    ],
+    "n": 10,
+    "t0": 0,
+    "no_hc": false,
+    "ls": false,
+    "lp": false,
+    "eager": false,
+    "threads": 4,
+    "tf_threads": 4,
+    "sin_original": true,
+    "out": "./Resultados_escalabilidad\\compresion"
+  },
+  "tf_intra": 4,
+  "tf_inter": 4,
+  "fecha": "2026-10-07 23:03:44"
+}

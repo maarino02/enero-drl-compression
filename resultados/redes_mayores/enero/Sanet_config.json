@@ -1,0 +1,27 @@
+{
+  "argumentos": {
+    "g": "Sanet",
+    "f": "../datasets/results-1-link_capacity-unif-05-1/results_zoo/Sanet",
+    "orig": "./modelsV2/ckpt_ACT-282",
+    "model": [
+      [
+        "Estudiante",
+        "student",
+        "./modelsStudentV2_A/ckpt_STUDENT_V2_BEST-1"
+      ]
+    ],
+    "n": 10,
+    "t0": 0,
+    "no_hc": false,
+    "ls": true,
+    "lp": true,
+    "eager": false,
+    "threads": null,
+    "tf_threads": null,
+    "sin_original": false,
+    "out": "./Resultados_escalabilidad\\enero"
+  },
+  "tf_intra": 0,
+  "tf_inter": 0,
+  "fecha": "2026-10-07 04:31:11"
+}

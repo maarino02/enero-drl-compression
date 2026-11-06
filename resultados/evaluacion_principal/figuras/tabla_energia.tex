@@ -1,0 +1,14 @@
+\begin{tabular}{lrrrr}
+\toprule
+M\'etodo & $t$ DRL (s) & $t$ DRL+HC (s) & $E$/optimizaci\'on (J) & $E$/a\~no (kWh) \\
+\midrule
+Original & 5.560 & 19.955 & 476.9 & 13.93 \\
+Podado50 & 5.783 & 19.371 & 463.0 & 13.52 \\
+Podado90 & 5.752 & 21.460 & 512.9 & 14.98 \\
+Estudiante & 4.611 & 14.892 & 355.9 & 10.39 \\
+TFLite_FP32 & 10.392 & 24.847 & 593.8 & 17.34 \\
+FP16 & 10.443 & 24.935 & 595.9 & 17.40 \\
+INT8_dinamico & 14.641 & 28.703 & 686.0 & 20.03 \\
+Cota LP & 0.125 & -- & 3.0 & 0.09 \\
+\bottomrule
+\end{tabular}

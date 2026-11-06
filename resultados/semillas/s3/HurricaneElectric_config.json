@@ -1,0 +1,27 @@
+{
+  "argumentos": {
+    "g": "HurricaneElectric",
+    "f": "../datasets/dataset_sing_top/data/results_my_3_tops_unif_05-1/NEW_HurricaneElectric/EVALUATE",
+    "orig": "./modelsProbando/ckpt_ACT-172",
+    "model": [
+      [
+        "Estudiante_s3",
+        "student",
+        "./modelsStudentV2_s3/ckpt_STUDENT_V2_BEST-1"
+      ]
+    ],
+    "n": 50,
+    "t0": 0,
+    "no_hc": false,
+    "ls": false,
+    "lp": false,
+    "eager": false,
+    "threads": null,
+    "tf_threads": 4,
+    "sin_original": true,
+    "out": "./Resultados_semillas\\s3"
+  },
+  "tf_intra": 4,
+  "tf_inter": 4,
+  "fecha": "2026-10-07 20:41:54"
+}

@@ -1,0 +1,2 @@
+topologia;modelo;ospf;drl_mejor;drl_final;drl_hc;lp;ls_solo;acuerdo;t_drl_s;t_hc_s;t_total_s;t_ls_s;t_lp_s;pasos;iter_hc;lat_inv_mediana_ms;mejora_drl_vs_ospf_%;mejora_drlhc_vs_ospf_%;brecha_drl_vs_lp_%;brecha_drlhc_vs_lp_%;lat_mediana_ms;lat_p95_ms
+Janetbackbone;Estudiante_s3;1,1192791304347827;1,114609043478261;1,3303867826086957;0,8534601739130434;;;;7,668015204003313;30,106507015995447;37,774522219998765;;;122,0;43,2;5,807343000196852;0,41724059973383254;23,749121134643346;;;5,80124999396503;7,48317499528639

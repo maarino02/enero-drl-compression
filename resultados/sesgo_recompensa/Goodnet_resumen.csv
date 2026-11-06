@@ -1,0 +1,3 @@
+topologia,politica,TMs,pasos_por_episodio,sesgo_medio_paso,sesgo_std_paso,pct_pasos_sesgo_negativo,sesgo_medio_episodio,retorno_medio_v16,retorno_medio_v17,max_error_telescopico_v17
+Goodnet,ospf,20,41.0,-0.031592073170731705,0.012338017053213385,99.8780487804878,-1.2952749999999997,-1.2952749999999997,0.0,0.0
+Goodnet,aleatoria,20,41.0,-0.02759670731707317,0.013174094029259308,99.39024390243902,-1.131465,-2.88913,-1.757665,0.0003072005786144416

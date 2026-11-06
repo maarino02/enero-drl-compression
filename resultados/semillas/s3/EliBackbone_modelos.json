@@ -1,0 +1,22 @@
+[
+  {
+    "modelo": "Estudiante_s3",
+    "tipo": "tf",
+    "restauracion_ok": true,
+    "parametros": 2753,
+    "no_nulos": 2753,
+    "esparsidad": 0.0,
+    "bytes_fp32": 11012,
+    "bytes_gzip": 10135,
+    "bytes_checkpoint_disco": 13912,
+    "esparsidad_por_matriz": {
+      "FirstLayer/kernel:0": 0.0,
+      "kernel:0": 0.0,
+      "recurrent_kernel:0": 0.0,
+      "bias:0": 0.0,
+      "Readout_1/kernel:0": 0.0,
+      "Readout_2/kernel:0": 0.0,
+      "Readout_Final/kernel:0": 0.0
+    }
+  }
+]

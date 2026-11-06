@@ -1,0 +1,14 @@
+# Python 3.10 (versiones exactas del entorno en el que se obtuvieron los resultados)
+# Instalar desde la raiz del proyecto: pip install -r requirements.txt
+tensorflow-cpu==2.10.0
+keras==2.10.0
+protobuf==3.19.6
+flatbuffers==25.2.10
+gymnasium==1.2.3
+numpy==1.26.4
+scipy==1.13.1
+pandas==2.3.0
+networkx==3.2.1
+matplotlib==3.9.4
+PuLP==3.2.2
+-e ./codigo/gym-graph

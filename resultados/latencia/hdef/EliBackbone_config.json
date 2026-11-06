@@ -1,0 +1,42 @@
+{
+  "argumentos": {
+    "g": "EliBackbone",
+    "f": "../datasets/dataset_sing_top/data/results_my_3_tops_unif_05-1/NEW_EliBackbone/EVALUATE",
+    "orig": "./modelsV2/ckpt_ACT-282",
+    "model": [
+      [
+        "Estudiante",
+        "student",
+        "./modelsStudentV2_A/ckpt_STUDENT_V2_BEST-1"
+      ],
+      [
+        "TFLite_FP32",
+        "tflite",
+        "./modelsCompressed_v2/actor_fp32.tflite"
+      ],
+      [
+        "FP16",
+        "tflite",
+        "./modelsCompressed_v2/actor_fp16.tflite"
+      ],
+      [
+        "INT8_dinamico",
+        "tflite",
+        "./modelsCompressed_v2/actor_dinamico.tflite"
+      ]
+    ],
+    "n": 5,
+    "t0": 0,
+    "no_hc": true,
+    "ls": false,
+    "lp": false,
+    "eager": false,
+    "threads": null,
+    "tf_threads": null,
+    "sin_original": false,
+    "out": "./Resultados_latencia_hilos\\hdef"
+  },
+  "tf_intra": 0,
+  "tf_inter": 0,
+  "fecha": "2026-10-06 23:39:16"
+}

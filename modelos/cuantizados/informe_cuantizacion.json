@@ -1,0 +1,26 @@
+{
+  "dinamico": {
+    "fichero": "./modelsCompressed_v2\\actor_dinamico.tflite",
+    "bytes": 82072,
+    "mae_logits": 2.8308365213063857,
+    "acuerdo_argmax_%": 76.66666666666667,
+    "n_estados": 120
+  },
+  "fp16": {
+    "fichero": "./modelsCompressed_v2\\actor_fp16.tflite",
+    "bytes": 103156,
+    "mae_logits": 0.054050471920830505,
+    "acuerdo_argmax_%": 100.0,
+    "n_estados": 120
+  },
+  "int8": {
+    "error": "tensorflow/lite/kernels/concatenation.cc:148 t->dims->size != t0->dims->size (1 != 2)Node number 4 (CONCATENATION) failed to prepare."
+  },
+  "fp32": {
+    "fichero": "./modelsCompressed_v2\\actor_fp32.tflite",
+    "bytes": 136744,
+    "mae_logits": 1.8132952460566307e-05,
+    "acuerdo_argmax_%": 100.0,
+    "n_estados": 120
+  }
+}
