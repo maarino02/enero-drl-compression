@@ -1,3 +1,5 @@
+# Deriva de train_Enero_3top_script.py de ENERO (https://github.com/BNN-UPC/ENERO), licencia Apache 2.0.
+# Modificado en 2026. Consulta los ficheros LICENSE y NOTICE.
 # =============================================================================
 # entrenar_tanda_ppo.py  (TFG - version corregida)
 # Cambios respecto a train_Enero_3top_script.py:

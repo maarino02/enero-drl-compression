@@ -171,8 +171,15 @@ python dibujar_topologias.py -g HurricaneElectric
 python dibujar_topologias.py -g Janetbackbone
 ```
 
-## Créditos
+## Créditos y licencias
 
-El entorno de simulación, la arquitectura del agente y el bucle de entrenamiento parten del [código de ENERO](https://github.com/BNN-UPC/ENERO), publicado bajo licencia Apache 2.0, y se han modificado en este trabajo. Los datos proceden del [conjunto de datos público de ENERO](https://bnn.upc.edu/download/enero-dataset/).
+Este proyecto es un trabajo académico independiente, sin relación con los autores de ENERO ni de Topology Zoo.
+
+- **Código:** parte del código deriva de [ENERO](https://github.com/BNN-UPC/ENERO), publicado bajo licencia Apache 2.0, y se ha modificado en este trabajo. La licencia está en `LICENSE`, y `NOTICE` indica qué ficheros derivan de ENERO y qué se ha cambiado.
+- **Datos:** las matrices de tráfico y las topologías son un subconjunto del [conjunto de datos público de ENERO](https://bnn.upc.edu/download/enero-dataset/). Las topologías proceden de [Internet Topology Zoo](https://doi.org/10.25909/30153949), publicado bajo licencia [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), y ENERO las adaptó a su formato.
+
+Si usas este proyecto, cita también estos trabajos:
 
 > P. Almasan, S. Xiao, X. Cheng, X. Shi, P. Barlet-Ros y A. Cabellos-Aparicio, «ENERO: Efficient real-time WAN routing optimization with Deep Reinforcement Learning», *Computer Networks*, vol. 214, 109166, 2022. <https://doi.org/10.1016/j.comnet.2022.109166>
+
+> S. Knight, H. X. Nguyen, N. Falkner, R. Bowden y M. Roughan, «The Internet Topology Zoo», *IEEE Journal on Selected Areas in Communications*, vol. 29, n.º 9, pp. 1765-1775, 2011. <https://doi.org/10.1109/JSAC.2011.111002>

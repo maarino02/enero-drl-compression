@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+# Deriva de defo_process_results.py de ENERO (https://github.com/BNN-UPC/ENERO), licencia Apache 2.0.
+# Modificado en 2026. Consulta los ficheros LICENSE y NOTICE.
 
 import numpy as np
 import re

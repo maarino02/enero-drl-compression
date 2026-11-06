@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Adapta fragmentos de train_Enero_3top_script.py de ENERO (https://github.com/BNN-UPC/ENERO), licencia Apache 2.0.
+# Modificado en 2026. Consulta los ficheros LICENSE y NOTICE.
 """
 podar_y_reentrenar.py - Poda por magnitud con mascaras manuales + fine-tuning PPO
 ==================================================================================

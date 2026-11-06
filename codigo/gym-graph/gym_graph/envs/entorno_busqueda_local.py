@@ -1,3 +1,5 @@
+# Deriva de environment15.py de ENERO (https://github.com/BNN-UPC/ENERO), licencia Apache 2.0.
+# Modificado en 2026. Consulta los ficheros LICENSE y NOTICE.
 import gymnasium as gym
 import numpy as np
 import networkx as nx

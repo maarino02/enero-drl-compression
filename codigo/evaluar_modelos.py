@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Adapta fragmentos de script_eval_on_single_topology.py de ENERO (https://github.com/BNN-UPC/ENERO), licencia Apache 2.0.
+# Modificado en 2026. Consulta los ficheros LICENSE y NOTICE.
 """
 evaluar_modelos.py - Evaluacion corregida y unificada de los modelos del TFG
 ===============================================================================
