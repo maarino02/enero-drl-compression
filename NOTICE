@@ -1,0 +1,35 @@
+enero-drl-compression
+Copyright 2026 Marino Ramírez Pulido
+
+This product is a derivative work of ENERO
+(https://github.com/BNN-UPC/ENERO), developed by Paul Almasan, Shihan Xiao,
+Xiangle Cheng, Xiang Shi, Pere Barlet-Ros and Albert Cabellos-Aparicio
+(Barcelona Neural Networking Center, Universitat Politècnica de Catalunya),
+licensed under the Apache License, Version 2.0.
+
+Files derived from ENERO and modified in this work:
+  - code/gym-graph/: environments Env15 and Env16 migrated from OpenAI Gym to
+    Gymnasium (step/reset API, declared spaces, unwrapped access). The SAP
+    environment (Env20) and the DEFO result reader were removed.
+  - code/gym-graph/gym_graph/envs/environment17.py: new environment based on
+    Env16, with a corrected reward (load-dispersion term computed without bias).
+  - code/gym-graph/gym_graph/envs/topology_reader.py: reduced topology reader
+    derived from ENERO's defo_process_results.py (only the parts that read the
+    network topology are kept).
+  - code/agent/actor.py, code/agent/critic.py: layer normalization in the GNN
+    update and configurable hyperparameters.
+  - code/training/: CPU training in resumable chunks, Gymnasium API, corrected
+    reward and extended logging.
+  - code/evaluation/local_search.py: Hill Climbing local search adapted from
+    ENERO's single-topology evaluation script.
+  - code/utils/convert_dataset.py: adapted to the new folder layout.
+  Comments, docstrings and messages were translated into English, and the files
+  were renamed and reorganized into packages.
+
+New files written for this work: code/compression/, code/evaluation/evaluate.py,
+code/evaluation/milp.py, code/evaluation/run_*.py, code/analysis/,
+code/figures/, code/config.py, and all the trained models and results in
+code/models/ and code/results/.
+
+The ENERO dataset (topologies and traffic matrices) is not redistributed here;
+it must be downloaded from the original repository.

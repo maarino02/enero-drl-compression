@@ -1,0 +1,40 @@
+% =====================================================================
+% prefacio.tex  (versión sin páginas en blanco innecesarias)
+%  - Se elimina el \chapter*{} vacío del principio (generaba una página
+%    sin contenido antes de la segunda portada).
+%  - \cleardoublepage -> \clearpage (ya no se fuerza página impar).
+%  - Las páginas de autorización e informe usan \clearpage en lugar de
+%    \chapter*{} vacío.
+% =====================================================================
+
+% ---------------------------------------------------------------------
+\clearpage
+\thispagestyle{empty}
+
+\noindent{\textbf{Palabras clave}: redes autónomas, ingeniería de tráfico, aprendizaje por refuerzo profundo, redes neuronales de grafos, compresión de redes neuronales, poda, cuantización, destilación de conocimiento, programación lineal entera mixta, eficiencia energética.}\\
+
+\vspace{0.7cm}
+\noindent{\textbf{Resumen}}\\
+
+Las redes autónomas necesitan optimizar su configuración de forma continua, y el aprendizaje por refuerzo profundo (DRL) combinado con redes neuronales de grafos (GNN) se ha propuesto como alternativa rápida a los métodos clásicos de ingeniería de tráfico. ENERO es un ejemplo destacado: un agente DRL+GNN elige un nodo intermedio para cada demanda crítica y una búsqueda local refina después la solución. Sin embargo, la inferencia del agente se repite en cada ejecución del optimizador y su coste en memoria, tiempo y energía crece con el tamaño de la red. Este trabajo estudia si las técnicas de compresión de redes neuronales permiten reducir ese coste sin degradar la calidad del enrutamiento.
+
+Para ello, se migró el entorno de simulación de ENERO a Gymnasium, se adaptó el entrenamiento a la ejecución en CPU y se entrenó un agente base. En el proceso se añadió a la recompensa un término de dispersión de la carga y se detectó, cuantificó y corrigió un sesgo sistemático en su primera implementación. Sobre el agente base se aplicaron la poda por magnitud con reentrenamiento, dos variantes de cuantización posterior al entrenamiento y la destilación de conocimiento hacia un estudiante 4,6 veces más pequeño, y todos los modelos se evaluaron en diez topologías no vistas, de 20 a 43 nodos, frente a OSPF, la búsqueda local, una cota de programación lineal y la formulación exacta del problema (MILP).
+
+Los resultados muestran que la compresión conserva la calidad del enrutamiento: con la búsqueda local, los modelos comprimidos mejoran en media la utilización máxima de enlace de OSPF entre un 32,6 y un 35,0\,\% en las tres topologías principales, frente al 34,3\,\% del original, y rinden como él en siete redes mayores. La destilación es la técnica más adecuada para un procesador convencional: el estudiante acelera la inferencia 3,2 veces y reduce hasta un 25\,\% la energía por optimización, mientras que la poda y la cuantización solo reducen el tamaño del modelo. Sin embargo, al valorar también la aplicabilidad práctica, la metodología más adecuada para redes de este tamaño es la formulación exacta: resuelto sobre las mismas demandas críticas, el MILP supera a ENERO en las diez topologías, unas 70 veces más rápido y sin entrenamiento previo, y sobre todas las demandas alcanza prácticamente la cota de programación lineal. El agente, que requiere días de entrenamiento y generaliza mal, solo compensaría en redes mucho mayores, y comprimirlo no cambia esta conclusión.
+
+% ---------------------------------------------------------------------
+\clearpage
+\thispagestyle{empty}
+
+\noindent{\textbf{Keywords}: autonomous networks, traffic engineering, deep reinforcement learning, graph neural networks, neural network compression, pruning, quantization, knowledge distillation, mixed integer linear programming, energy efficiency.}\\
+
+\vspace{0.7cm}
+\noindent{\textbf{Abstract}}\\
+
+Autonomous networks need to optimize their configuration continuously, and deep reinforcement learning (DRL) combined with graph neural networks (GNN) has been proposed as a fast alternative to classical traffic engineering methods. ENERO is a prominent example: a DRL+GNN agent selects a middlepoint for each critical demand, and a local search then refines the solution. However, the agent's inference is repeated every time the optimizer runs, and its memory, time and energy cost grows with the size of the network. This work studies whether neural network compression techniques can reduce that cost without degrading routing quality.
+
+To this end, ENERO's simulation environment was migrated to Gymnasium, training was adapted to run on CPU, and a base agent was trained. In the process, a load-dispersion term was added to the reward, and a systematic bias in its first implementation was detected, quantified and corrected. Magnitude pruning with fine-tuning, two post-training quantization variants and knowledge distillation into a student 4.6 times smaller were applied to the base agent, and all models were evaluated on ten unseen topologies with 20 to 43 nodes, against OSPF, local search, a linear programming bound and the exact formulation of the problem (MILP).
+
+The results show that compression preserves routing quality: combined with local search, the compressed models improve OSPF's maximum link utilization by 32.6 to 35.0\,\% on average on the three main topologies, compared with 34.3\,\% for the original, and perform like it on seven larger networks. Distillation is the most suitable technique for a general-purpose processor: the student speeds up inference by a factor of 3.2 and reduces energy per optimization by up to 25\,\%, whereas pruning and quantization only reduce model size. However, when practical applicability is also considered, the most suitable methodology for networks of this size is the exact formulation: solved over the same critical demands as the agent, the MILP outperforms ENERO on all ten topologies, about 70 times faster and without prior training, and over all demands it practically reaches the linear programming bound. The agent, which requires days of training and generalizes poorly, would only pay off on much larger networks, and compressing it does not change this conclusion.
+
+% ---------------------------------------------------------------------

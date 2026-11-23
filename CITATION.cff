@@ -1,0 +1,41 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below, together with the original ENERO paper."
+title: "Compresión de agentes de Aprendizaje por Refuerzo Profundo para la Ingeniería de Tráfico: Poda, Cuantización y Destilación del optimizador ENERO"
+type: software
+authors:
+  - family-names: "Ramírez Pulido"
+    given-names: "Marino"
+    email: "maarinoraamirez02@gmail.com"
+    affiliation: "Universidad de Granada"
+repository-code: "https://github.com/maarino02/enero-drl-compression"
+license: Apache-2.0
+date-released: 2026-11-23
+keywords:
+  - deep reinforcement learning
+  - graph neural networks
+  - traffic engineering
+  - model compression
+  - knowledge distillation
+  - pruning
+  - quantization
+references:
+  - type: article
+    title: "ENERO: Efficient real-time WAN routing optimization with Deep Reinforcement Learning"
+    authors:
+      - family-names: Almasan
+        given-names: Paul
+      - family-names: Xiao
+        given-names: Shihan
+      - family-names: Cheng
+        given-names: Xiangle
+      - family-names: Shi
+        given-names: Xiang
+      - family-names: Barlet-Ros
+        given-names: Pere
+      - family-names: Cabellos-Aparicio
+        given-names: Albert
+    journal: "Computer Networks"
+    volume: 214
+    start: 109166
+    year: 2022
+    doi: "10.1016/j.comnet.2022.109166"

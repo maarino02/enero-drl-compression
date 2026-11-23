@@ -1,0 +1,209 @@
+\chapter{Planificación y estimación de costes}\label{cap:plan}
+
+Este capítulo describe cómo se ha organizado el trabajo a lo largo del tiempo y estima su coste. Se presentan la metodología de trabajo y el seguimiento con el director (Sección~\ref{sec:metodologia}), las fases en que se ha dividido (Sección~\ref{sec:fases}) y su cronograma (Sección~\ref{sec:cronograma}), las principales desviaciones respecto a lo previsto (Sección~\ref{sec:desviaciones}) y, por último, el presupuesto del proyecto (Sección~\ref{sec:costes}).
+
+% =====================================================================
+\section{Metodología y seguimiento}\label{sec:metodologia}
+
+El trabajo se ha desarrollado de forma iterativa. Cada fase de desarrollo (puesta en marcha del código, entrenamiento, compresión, evaluación) ha dado lugar a resultados que se han revisado y que, en varios casos, han llevado a corregir fases anteriores. Este enfoque encaja con la naturaleza experimental del trabajo, en la que no es posible fijar de antemano todos los pasos: por ejemplo, la revisión del código permitió detectar el sesgo de la recompensa descrito en la Sección~\ref{sec:analisis_recompensa}, lo que obligó a volver a entrenar el agente base.
+
+El seguimiento se ha realizado mediante reuniones mensuales con el director, celebradas el último lunes de cada mes. En ellas se revisaban los avances, se discutían los problemas encontrados y se acordaban los siguientes pasos. Además de estas reuniones, el director revisó las sucesivas versiones de la memoria.
+
+El TFG tiene una carga de 12 créditos ECTS. Con la equivalencia de 25 a 30 horas de trabajo del estudiante por crédito establecida por el Real Decreto 1125/2003, corresponde a una dedicación de entre 300 y 360 horas, que es aproximadamente la dedicación real del trabajo. A ella se suman unas 700 horas de ejecución desatendida de los entrenamientos y las evaluaciones, que no requieren la atención del estudiante y se contabilizan como consumo eléctrico (Sección~\ref{sec:costes_energia}).
+
+% =====================================================================
+\section{Fases del trabajo}\label{sec:fases}
+
+El trabajo se ha organizado en las siguientes fases:
+
+\begin{enumerate}
+	\item \textbf{Estudio del estado del arte y del caso de uso} (noviembre--diciembre de 2025). Lectura de la bibliografía sobre redes autónomas, optimización de redes, aprendizaje por refuerzo y compresión de redes neuronales, y estudio detallado del artículo y del código de ENERO.
+	\item \textbf{Puesta en marcha del código} (diciembre de 2025--enero de 2026). Instalación del entorno de desarrollo, migración de \texttt{gym-graph} de Gym a Gymnasium y adaptación del código de entrenamiento para su ejecución en CPU.
+	\item \textbf{Entrenamientos preliminares del agente base} (febrero--abril de 2026). Pruebas de entrenamiento para fijar la configuración y primeras evaluaciones frente a OSPF y a la LS. Con episodios de entre 45 y 57 minutos en esta fase, cada entrenamiento completo requería unas dos semanas de ejecución continua, lo que hizo de esta la fase más larga en tiempo de calendario.
+	\item \textbf{Compresión} (abril--junio de 2026). Implementación de la poda con reentrenamiento, la cuantización y la destilación, desarrollo de la cota de programación lineal y evaluación de los modelos comprimidos.
+	\item \textbf{Revisión, corrección y experimentos finales} (septiembre--octubre de 2026). A partir de las observaciones del director sobre el primer borrador, se reorientó la memoria para centrarla en la compresión, se revisó el código, se detectó y corrigió el sesgo de la recompensa, se entrenó el agente base que se utiliza en este trabajo, y se realizaron la compresión y la evaluación finales con una metodología de medida revisada, que incluye la comparación con la formulación exacta MILP.
+	\item \textbf{Redacción de la memoria}, en tres etapas: el marco teórico (diciembre de 2025--enero de 2026), los capítulos de métodos, experimentos y resultados (mayo--julio de 2026), que dieron lugar al primer borrador completo, y la revisión y versión final (septiembre--noviembre de 2026).
+\end{enumerate}
+
+En enero y la primera mitad de febrero de 2026, coincidiendo con el periodo de exámenes, la dedicación al trabajo fue menor. En agosto, coincidiendo con el periodo vacacional, el trabajo se detuvo a la espera de la revisión del primer borrador, y se retomó en septiembre a partir de sus conclusiones.
+
+% =====================================================================
+\section{Cronograma}\label{sec:cronograma}
+
+La Figura~\ref{fig:gantt} muestra el diagrama de Gantt del trabajo, con una resolución mensual.
+
+\begin{figure}[H]
+	\centering
+	% adjustbox (entorno) en lugar de \resizebox: no lee la figura como argumento,
+	% así la biblioteca babel de TikZ puede desactivar los atajos < > del español
+	\begin{adjustbox}{width=\textwidth}
+	\begin{ganttchart}[
+		hgrid, vgrid,
+		x unit=0.8cm, y unit chart=0.52cm,
+		title label font=\footnotesize,
+		title height=1,
+		bar height=0.55,
+		group height=0.3,
+		bar label font=\small,
+		group label font=\small\bfseries,
+		milestone label font=\small\itshape,
+		bar/.append style={fill=gray!45},
+		group/.append style={fill=black},
+		milestone/.append style={fill=black}
+		]{1}{13}
+		\gantttitle{2025}{2} \gantttitle{2026}{11} \\
+		\gantttitle{Nov}{1} \gantttitle{Dic}{1} \gantttitle{Ene}{1} \gantttitle{Feb}{1}
+		\gantttitle{Mar}{1} \gantttitle{Abr}{1} \gantttitle{May}{1} \gantttitle{Jun}{1}
+		\gantttitle{Jul}{1} \gantttitle{Ago}{1} \gantttitle{Sep}{1} \gantttitle{Oct}{1}
+		\gantttitle{Nov}{1} \\
+		\ganttgroup{Estudio}{1}{2} \\
+		\ganttbar{Estado del arte y ENERO}{1}{2} \\
+		\ganttgroup{Desarrollo}{2}{12} \\
+		\ganttbar{Puesta en marcha y migración}{2}{3} \\
+		\ganttbar{Entrenamientos preliminares}{4}{6} \\
+		\ganttbar{Compresión y evaluación}{6}{8} \\
+		\ganttbar{Revisión y experimentos finales}{11}{12} \\
+		\ganttgroup{Redacción}{2}{13} \\
+		\ganttbar{Marco teórico}{2}{3} \\
+		\ganttbar{Métodos, experimentos y resultados}{7}{9} \\
+		\ganttbar{Revisión y versión final}{11}{13} \\
+		\ganttbar[bar/.append style={fill=white, pattern=north east lines}]{Exámenes (dedicación reducida)}{3}{4} \\
+		\ganttbar[bar/.append style={fill=white, pattern=north east lines}]{Periodo vacacional}{10}{10} \\
+		\ganttmilestone{Primer borrador completo}{9} \\
+		\ganttmilestone{Entrega (3 de noviembre)}{13}
+	\end{ganttchart}
+	\end{adjustbox}
+	\caption{Diagrama de Gantt del trabajo.}
+	\label{fig:gantt}
+\end{figure}
+
+% =====================================================================
+\section{Desviaciones y riesgos}\label{sec:desviaciones}
+
+A lo largo del trabajo se produjeron varias desviaciones respecto a lo previsto inicialmente, que conviene recoger porque explican la forma final del cronograma:
+
+\begin{itemize}
+	\item \textbf{Duración del entrenamiento}. Sin una GPU compatible, cada episodio de entrenamiento requería entre 45 y 57 minutos en modo \textit{eager}, por lo que cada entrenamiento completo ocupaba el equipo durante unas dos semanas y las pruebas preliminares se alargaron varios meses. Este riesgo se mitigó en parte con el entrenamiento por subprocesos, que permitía reanudar tras cualquier interrupción, y con la ejecución en modo grafo del entrenamiento (Sección~\ref{sec:ejecucion}).
+	\item \textbf{Errores detectados en la revisión}. La revisión del código en la última fase reveló el sesgo de la recompensa (Sección~\ref{sec:analisis_recompensa}) y problemas en algunas mediciones de la evaluación. Su corrección supuso entrenar el agente base con la recompensa corregida y rehacer la compresión y la evaluación, lo que ocupó la mayor parte de septiembre y octubre.
+\end{itemize}
+
+% =====================================================================
+\section{Estimación de costes}\label{sec:costes}
+
+El presupuesto se estima como el coste que tendría el proyecto si lo realizara un equipo profesional, desglosado en costes de personal, de equipamiento, de software y de consumo eléctrico.
+
+\subsection{Costes de personal}\label{sec:costes_personal}
+
+Las horas del estudiante se valoran como las de un ingeniero de telecomunicación \textit{junior}. Los portales de empleo sitúan su salario bruto en España entre unos 20\,600 y 23\,250~€ anuales \cite{jobted_teleco,glassdoor_teleco_junior}. Tomando el valor superior, sumando las cotizaciones a la Seguridad Social a cargo de la empresa (en torno al 31\,\%) y considerando una jornada anual de unas 1\,760 horas, se obtiene un coste de unos 17~€/h. Para el director se toma un coste de 40~€/h, correspondiente a un perfil de ingeniero sénior o de profesor doctor.
+
+La Tabla~\ref{tab:horas} recoge la estimación de horas por fase. El total se ajusta a la carga máxima que corresponde a los 12 créditos ECTS; no incluye el tiempo de ejecución desatendida de los entrenamientos, que se contabiliza como consumo eléctrico.
+
+\begin{table}[H]
+	\centering
+	\small
+	\begin{adjustbox}{max width=\textwidth}
+	\begin{tabular}{lr}
+		\toprule
+		\textbf{Fase} & \textbf{Horas} \\
+		\midrule
+		Estudio del estado del arte y del caso de uso & 50 \\
+		Puesta en marcha del código y migración & 60 \\
+		Entrenamientos preliminares del agente base & 45 \\
+		Compresión y evaluación & 60 \\
+		Revisión, corrección y experimentos finales & 60 \\
+		Redacción de la memoria & 85 \\
+		\midrule
+		\textbf{Total} & \textbf{360} \\
+		\bottomrule
+	\end{tabular}
+	\end{adjustbox}
+	\caption{Estimación de horas de trabajo del estudiante por fase.}
+	\label{tab:horas}
+\end{table}
+
+
+La dedicación del director se estima en 17,5 horas: 5,5 horas de reuniones (11 reuniones mensuales de unos 30 minutos) y unas 12 horas de lectura y corrección de las sucesivas versiones de la memoria.
+
+\subsection{Costes de equipamiento}\label{sec:costes_equipos}
+
+El coste de los equipos se imputa mediante su amortización lineal durante el tiempo de uso en el proyecto:
+\begin{equation}\label{eq:amortizacion}
+	C_{\text{amort}} = P_{\text{compra}} \cdot \frac{t_{\text{uso}}}{t_{\text{vida}}},
+\end{equation}
+donde $t_{\text{vida}}$ es la vida útil del equipo. Se toman 4 años, que corresponden al coeficiente máximo de amortización del 25\,\% anual que las tablas de la Agencia Tributaria establecen para los equipos de procesamiento de información. La Tabla~\ref{tab:amortizacion} recoge la amortización de cada equipo.
+
+\begin{table}[H]
+	\centering
+	\small
+	\begin{adjustbox}{max width=\textwidth}
+	\begin{tabular}{lccc}
+		\toprule
+		\textbf{Equipo} & \textbf{Precio} & \textbf{Uso en el proyecto} & \textbf{Amortización} \\
+		\midrule
+		MSI Bravo 17 (equipo A) & 1\,300~€ & 12 meses & 325,00~€ \\
+		HP 250 G8 (equipo B) & 600~€ & 5 meses & 62,50~€ \\
+		\midrule
+		\textbf{Total} & & & \textbf{387,50~€} \\
+		\bottomrule
+	\end{tabular}
+	\end{adjustbox}
+	\caption{Amortización de los equipos utilizados.}
+	\label{tab:amortizacion}
+\end{table}
+
+El equipo B se utilizó durante las fases de entrenamiento, en las que el equipo A permanecía ocupado (unos cinco meses en total), y su precio corresponde al valor aproximado de ese modelo en el momento de su compra, en 2023. El equipo A se adquirió en 2020, por lo que en términos contables ya estaría amortizado. Aun así, se imputa su coste de uso como si se tratara de un equipo equivalente adquirido para el proyecto, lo que refleja mejor el coste real de realizarlo.
+
+\subsection{Costes de software}
+
+Todo el software utilizado es libre o gratuito: Python y sus bibliotecas (TensorFlow, Gymnasium, NetworkX, PuLP, NumPy, SciPy, Pandas, Matplotlib), la distribución Anaconda, los \textit{solvers} CBC y HiGHS, Visual Studio Code y \LaTeX{}. Los sistemas operativos venían incluidos con los equipos. El coste imputable por software es, por tanto, nulo.
+
+\subsection{Consumo eléctrico}\label{sec:costes_energia}
+
+El consumo eléctrico más relevante corresponde a las ejecuciones largas: los entrenamientos del agente base, los reentrenamientos de la compresión y las evaluaciones. Se estima como:
+\begin{equation}\label{eq:energia_proyecto}
+	E = \bar{P} \cdot t_{\text{ejec}}, \qquad C_{\text{elec}} = E \cdot p_{\text{kWh}},
+\end{equation}
+donde $\bar{P}$ es la potencia media del equipo durante la ejecución, $t_{\text{ejec}}$ el tiempo total de ejecución y $p_{\text{kWh}}$ el precio de la electricidad, que se toma como 0,20~€/kWh.
+
+La potencia del procesador se midió con HWiNFO durante 76 de las 87 horas que duró el entrenamiento del que procede el modelo base (Sección~\ref{sec:hiperparametros_base}); la medición se inició con el entrenamiento ya en marcha. La potencia media del encapsulado de la CPU (\textit{CPU Package Power}) fue de 23,9~W, con un máximo de 34,5~W, lo que supone un consumo del procesador de 1,82~kWh en ese periodo. Esta medida no incluye el resto del equipo (pantalla, memoria, almacenamiento, ventilación y pérdidas de alimentación), cuyo consumo se estima en unos 16~W adicionales, por lo que se toma una potencia media del equipo completo de unos 40~W.
+
+Con unas 700 horas de ejecución en total, que incluyen los entrenamientos del agente base, los reentrenamientos de la compresión y las evaluaciones, el consumo es de unos 28~kWh y su coste de unos 5,60~€.
+
+Durante la medición, la temperatura media del procesador fue de unos 95~$^\circ$C, cerca de su límite térmico. Esto indica que el portátil trabajó de forma sostenida en el límite de su refrigeración, lo que puede reducir la frecuencia del procesador y alargar los tiempos de ejecución, y es un factor a tener en cuenta en las medidas de latencia (Sección~\ref{sec:metricas}).
+
+Aunque su coste económico es pequeño frente al de personal, este dato es relevante para el objetivo de eficiencia energética del trabajo: permite comparar la energía consumida una sola vez en el entrenamiento con la que se ahorra en cada inferencia gracias a la compresión (Sección~\ref{sec:res_energia}).
+
+\subsection{Presupuesto total}\label{sec:presupuesto}
+
+La Tabla~\ref{tab:presupuesto} resume el presupuesto. A los costes directos se añade un 10\,\% de costes indirectos, que cubre gastos como el espacio de trabajo, la conexión a Internet o el material de oficina, y el IVA vigente del 21\,\%.
+
+\begin{table}[H]
+	\centering
+	\small
+	\begin{adjustbox}{max width=\textwidth}
+	\begin{tabular}{lrrr}
+		\toprule
+		\textbf{Concepto} & \textbf{Cantidad} & \textbf{Coste unitario} & \textbf{Importe} \\
+		\midrule
+		Ingeniero junior (estudiante) & 360~h & 17~€/h & 6\,120,00~€ \\
+		Ingeniero sénior (director) & 17,5~h & 40~€/h & 700,00~€ \\
+		Amortización de equipos & & & 387,50~€ \\
+		Software & & & 0,00~€ \\
+		Consumo eléctrico & 28~kWh & 0,20~€/kWh & 5,60~€ \\
+		\midrule
+		\textbf{Costes directos} & & & \textbf{7\,213,10~€} \\
+		Costes indirectos (10\,\%) & & & 721,31~€ \\
+		\midrule
+		\textbf{Total sin IVA} & & & \textbf{7\,934,41~€} \\
+		IVA (21\,\%) & & & 1\,666,23~€ \\
+		\midrule
+		\textbf{Total} & & & \textbf{9\,600,64~€} \\
+		\bottomrule
+	\end{tabular}
+	\end{adjustbox}
+	\caption{Presupuesto del proyecto.}
+	\label{tab:presupuesto}
+\end{table}
+
+
+El coste del proyecto está dominado por el personal, que supone cerca del 95\,\% de los costes directos. El coste del equipamiento y de la energía es reducido porque todo el trabajo se ha realizado en ordenadores personales, sin necesidad de infraestructura de cálculo específica, lo que es coherente con el enfoque del trabajo: estudiar cómo hacer que los agentes de DRL sean ejecutables en hardware modesto.

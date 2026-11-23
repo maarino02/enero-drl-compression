@@ -1,0 +1,83 @@
+\chapter{Introducción}\label{cap:int}
+
+Las redes de telecomunicaciones se han convertido en una infraestructura crítica sobre la que se apoyan prácticamente todos los servicios digitales. El crecimiento sostenido del tráfico, la aparición de servicios con requisitos muy dispares y el despliegue de arquitecturas 5G y, en el futuro, 6G han multiplicado la complejidad de su operación. En este escenario, la configuración manual de la red resulta cada vez menos viable, y tanto la industria como los organismos de estandarización trabajan hacia el concepto de \textit{red autónoma}: una red capaz de monitorizarse, analizar su estado y tomar decisiones de reconfiguración con una intervención humana mínima \cite{coronado2022zero,etsi_zsm011}.
+
+Este Trabajo Fin de Grado toca tres temas que suelen estudiarse por separado: la optimización del enrutamiento en redes de área extensa (WAN), el aprendizaje por refuerzo profundo (\textit{Deep Reinforcement Learning}, DRL) como forma de tomar esas decisiones de enrutamiento, y la compresión de redes neuronales para que un agente de DRL gaste menos memoria, tiempo y energía al ejecutarse.
+
+\section{Contexto y motivación}\label{sec:int_motivacion}
+
+En una red autónoma, la optimización deja de ser una tarea puntual realizada por un ingeniero para convertirse en una fase más de un bucle cerrado de control que se ejecuta de forma continua: se observa el estado de la red, se detecta una desviación respecto al objetivo del operador y se calcula y aplica una nueva configuración \cite{etsi_zsm016}. Uno de los problemas más representativos que se resuelven en ese bucle es la \textit{ingeniería de tráfico} (\textit{Traffic Engineering}, TE) intradominio: dado un conjunto de demandas de tráfico entre pares de nodos, decidir por qué caminos se cursa cada una para repartir la carga y evitar la congestión. Una métrica habitual para medir la calidad de una solución es la utilización máxima de enlace (\textit{Maximum Link Utilization}, MLU), es decir, la carga relativa del enlace más ocupado de la red.
+
+El problema concreto que se aborda en este trabajo es el de \textbf{mínima congestión}: dadas una topología y una matriz de tráfico, encontrar el enrutamiento que minimiza la MLU, es decir, que reduce lo más posible la congestión del enlace más cargado. Si el tráfico de cada demanda pudiera dividirse libremente entre varios caminos, el problema sería lineal, y su solución óptima se obtendría de forma exacta mediante programación lineal (\textit{Linear Programming}, LP). En una red real, sin embargo, lo habitual es configurar un único camino por demanda, o a lo sumo unos pocos, y entonces el problema pasa a ser combinatorio. Para resolverlo se pueden utilizar métodos exactos de programación lineal entera mixta (\textit{Mixed Integer Linear Programming}, MILP), heurísticas como la búsqueda local o, más recientemente, aprendizaje por refuerzo. Este trabajo evalúa un método de este último tipo, ENERO, que combina un agente de aprendizaje por refuerzo profundo con una búsqueda local, y versiones comprimidas de su agente, y los compara con la solución exacta del problema.
+
+Los protocolos de enrutamiento por el camino más corto, como OSPF, son sencillos y robustos, pero no tienen en cuenta la carga: todo el tráfico entre dos nodos sigue la misma ruta aunque esta atraviese enlaces saturados. Ajustar los pesos de OSPF para minimizar la congestión es un problema NP-hard \cite{fortz2000internet}, y los métodos exactos basados en programación entera escalan mal: su tiempo de resolución puede dispararse en redes grandes, lo que encaja mal en un bucle de control que tiene que reaccionar a los cambios del tráfico.
+
+El DRL ofrece una alternativa: un agente aprende, mediante interacción con un entorno simulado, una política que propone buenas configuraciones en un tiempo muy reducido. Combinado con las redes neuronales de grafos (\textit{Graph Neural Networks}, GNN), capaces de procesar topologías de tamaño y forma arbitrarios, este enfoque ha dado lugar a optimizadores que generalizan a redes no vistas durante el entrenamiento. Un ejemplo destacado es ENERO \cite{ALMASAN2022109166}, que resuelve el problema de TE mediante enrutamiento por punto intermedio (\textit{middlepoint routing}): un agente DRL con una GNN elige, para cada demanda crítica, un nodo intermedio por el que forzar su paso y, a continuación, una búsqueda local (\textit{Local Search}, LS) refina la solución. ENERO constituye el caso de uso de este trabajo.
+
+La ventaja temporal del DRL depende de que la inferencia del agente sea rápida, y esa inferencia tiene un coste. En ENERO, para cada demanda que se reubica, el actor evalúa la GNN sobre un grafo por cada nodo intermedio candidato, así que el número de pasadas por la red neuronal en una optimización crece con el número de nodos y con el de demandas críticas. Si el optimizador se ejecuta de forma continua dentro de un bucle de control, cada milisegundo y cada kilobyte se repiten miles de veces a lo largo de su vida útil. A ello se suma la preocupación creciente por el consumo energético de las tecnologías de la información y de los propios modelos de aprendizaje profundo, que ha dado lugar a la línea de trabajo conocida como \textit{Green Networking} \cite{bianzino2012survey,du2020green}, y la posibilidad de desplegar estos agentes en equipos con recursos limitados, más cerca de los elementos de red que controlan.
+
+La compresión de redes neuronales, mediante técnicas como la poda de pesos, la cuantización o la destilación de conocimiento, persigue precisamente reducir el tamaño, la latencia y el consumo de los modelos manteniendo su calidad \cite{han2016deep,jacob2018quantization,hinton2015distilling}. Estas técnicas están muy maduras en aprendizaje supervisado, pero su aplicación a agentes de DRL está mucho menos estudiada \cite{ivanov2025neural}. En un agente de DRL hay una dificultad añadida: las decisiones son secuenciales y cada acción cambia el estado sobre el que se toman las siguientes, así que una pequeña desviación al principio puede alterar toda la trayectoria. En ENERO, reubicar una demanda cambia la carga de los enlaces y con ello las decisiones posteriores. No basta, por tanto, con medir cuánto se reduce el modelo; hay que comprobar si el agente comprimido sigue enrutando igual de bien.
+
+Esta es la pregunta que motiva el trabajo: \textbf{¿es posible reducir de forma significativa el coste de ejecución de un agente DRL+GNN para ingeniería de tráfico sin degradar de manera apreciable la calidad del enrutamiento que produce?} Para valorar el alcance práctico de la respuesta, el trabajo plantea también una segunda pregunta: si un agente así, comprimido o no, compensa frente a resolver el mismo problema de forma exacta.
+
+\section{Objetivos}\label{sec:int_objetivos}
+
+El \textbf{objetivo general} de este trabajo es evaluar la aplicación de técnicas de compresión de redes neuronales al agente de DRL de ENERO, cuantificando el compromiso entre la reducción del coste computacional (memoria, latencia y energía) y la pérdida de calidad en la optimización del enrutamiento.
+
+Para alcanzarlo se plantean los siguientes \textbf{objetivos específicos}:
+
+\begin{enumerate}
+	\item Estudiar la optimización en redes autónomas y las técnicas de compresión aplicables a agentes de DRL.
+	\item Reproducir el agente de ENERO en un entorno software actual, adaptando su código a las bibliotecas vigentes, y entrenar un agente base que sirva de referencia.
+	\item Analizar el diseño del entorno de simulación y de la función de recompensa, y corregir los problemas que puedan sesgar el aprendizaje o su interpretación.
+	\item Aplicar al agente base tres familias de técnicas de compresión: poda de pesos con reentrenamiento, cuantización posterior al entrenamiento y destilación de conocimiento hacia un modelo estudiante de menor tamaño.
+	\item Definir una metodología de evaluación que mida tanto el coste de los modelos (tamaño, número de parámetros y latencia de inferencia) como la calidad del enrutamiento (MLU, mejora frente a OSPF, distancia a una cota inferior obtenida por programación lineal y grado de coincidencia con las decisiones del modelo original).
+	\item Comparar ENERO, con el modelo original y con los comprimidos, con la formulación exacta del mismo problema como programa lineal entero mixto (MILP), tanto en calidad del enrutamiento como en aplicabilidad práctica: tiempo de optimización, coste de entrenamiento y capacidad de generalizar a redes distintas.
+	\item Estimar el impacto energético de cada alternativa y extraer conclusiones sobre la viabilidad de desplegar agentes comprimidos en redes autónomas y sobre la metodología más adecuada para este problema.
+\end{enumerate}
+
+\section{Contribuciones}\label{sec:int_contribuciones}
+
+Las principales aportaciones de este trabajo son las siguientes:
+
+\begin{itemize}
+	\item La migración del entorno de simulación de ENERO (\textit{gym-graph}) de OpenAI Gym a Gymnasium y la adaptación del proceso de entrenamiento para que pueda ejecutarse de forma estable y más eficiente en un ordenador personal con GPU no compatible. 
+	\item La incorporación a la recompensa de ENERO de un término de dispersión de la carga, que densifica la señal de aprendizaje, y la detección, explicación y corrección del sesgo que introducía su primera implementación, en una nueva versión del entorno. Con la recompensa corregida, el retorno de un episodio pasa a medir directamente la mejora respecto al enrutamiento inicial de OSPF, combinando la reducción de la MLU y la de la dispersión de la carga, y es positivo si y solo si esa combinación mejora. Esto facilita la interpretación del entrenamiento.
+	\item La aplicación y comparación, sobre un mismo agente DRL+GNN, de poda por magnitud con reentrenamiento mediante PPO, de dos variantes de cuantización posterior al entrenamiento y de destilación de conocimiento hacia un estudiante con menos parámetros.
+	\item Una metodología de evaluación centrada en la compresión, que separa el coste de la fase neuronal del coste de la optimización completa e incorpora métricas específicas, como la coincidencia de decisiones con el modelo original y la distancia a la cota de programación lineal.
+	\item Una estimación del consumo energético asociado a cada variante, en línea con los objetivos de \textit{Green Networking}.
+	\item Una comparación de ENERO, original y comprimido, con la formulación exacta del enrutamiento por punto intermedio, en dos variantes, que muestra que en redes de hasta 43 nodos el método exacto obtiene mejores soluciones, unas 70 veces más rápido y sin entrenamiento previo.
+	\item Una evaluación adicional en siete topologías de 30 a 43 nodos, seis de ellas mayores que las utilizadas en el artículo original, para medir la generalización del agente original y de los comprimidos y su distancia a la cota de programación lineal a medida que crece la red.
+\end{itemize}
+
+\section{Alcance y limitaciones}\label{sec:int_alcance}
+
+El trabajo se desarrolla íntegramente en simulación, sobre las topologías y matrices de tráfico del conjunto de datos publicado con ENERO, y no incluye un despliegue en equipos de red reales. La compresión se aplica únicamente al actor, que es la única red neuronal necesaria durante la inferencia; el crítico solo interviene en el entrenamiento. Todas las medidas de latencia se realizan en CPU de propósito general, por lo que no reflejan las aceleraciones que podría aportar hardware especializado, por ejemplo para explotar la dispersión de los modelos podados. Por último, el objetivo no es mejorar los resultados de ENERO, sino estudiar cuánto de su calidad se conserva al reducir el coste del agente y si, una vez comprimido, compensa frente a la formulación exacta del mismo problema. La comparación con otros optimizadores, como los que utiliza el artículo original, queda fuera del alcance.
+
+\section{Uso de herramientas de inteligencia artificial generativa}\label{sec:int_ia}
+
+Durante el desarrollo de este Trabajo Fin de Grado se ha utilizado una herramienta de inteligencia artificial generativa como apoyo en tareas de programación, análisis y redacción. Su uso se ha concentrado en los siguientes aspectos:
+
+\begin{itemize}
+	\item \textbf{Código}. Apoyo en errores en la adaptación del código de ENERO a las versiones actuales de las bibliotecas y en la localización de errores. Todas las figuras de resultados se han generado con estos scripts, en Python, a partir de los datos de los experimentos; no se han utilizado imágenes generadas por inteligencia artificial.
+	\item \textbf{Análisis}. Revisión de cálculos y comprobación de que las cifras de la memoria coinciden con los ficheros de resultados.
+	\item \textbf{Redacción}. Revisión de la estructura de la memoria, de la coherencia entre capítulos y de las referencias cruzadas.
+\end{itemize}
+
+El planteamiento del trabajo, el diseño de los experimentos, su ejecución y la interpretación de los resultados son del autor, y todos los resultados proceden de experimentos ejecutados por él. Cada propuesta de la herramienta se ha revisado antes de incorporarla, y se ha rechazado o modificado cuando no era correcta o no reflejaba el criterio del autor. Las cifras se han contrastado con los datos originales y el código se ha probado en el entorno del trabajo. Por tanto, el autor asume la plena responsabilidad del contenido de la memoria, de la corrección técnica del sistema implementado y de las conclusiones presentadas.
+
+\section{Estructura de la memoria}\label{sec:int_estructura}
+
+El resto del documento se organiza de la siguiente manera:
+
+\begin{itemize}
+	\item El \textbf{Capítulo~\ref{cap:opt}} presenta el marco de las redes autónomas, formaliza el problema de ingeniería de tráfico y revisa los métodos tradicionales para resolverlo y sus limitaciones. Introduce también los fundamentos del aprendizaje por refuerzo profundo, del algoritmo PPO y de las redes neuronales de grafos, y cómo se combinan en ENERO.
+	\item El \textbf{Capítulo~\ref{cap:comp}} revisa las técnicas de compresión de redes neuronales (poda, cuantización y destilación de conocimiento), las particularidades de aplicarlas a agentes de DRL y su relación con la eficiencia energética.
+	\item El \textbf{Capítulo~\ref{cap:plan}} recoge la planificación temporal del trabajo y la estimación de sus costes.
+	\item El \textbf{Capítulo~\ref{cap:mat}} describe los materiales y métodos: el entorno software y hardware, ENERO, el entorno de simulación, el agente PPO, la cota de programación lineal, la formulación exacta MILP y las métricas de evaluación.
+	\item El \textbf{Capítulo~\ref{cap:exp}} detalla el desarrollo experimental: la migración del entorno, la aceleración del entrenamiento, la corrección de la recompensa y la implementación del entrenamiento y de las tres técnicas de compresión.
+	\item El \textbf{Capítulo~\ref{cap:pru}} presenta y analiza los resultados: el entrenamiento del agente base, el resultado de cada técnica de compresión, el coste de los modelos comprimidos, la calidad del enrutamiento que producen en topologías no vistas y en redes mayores, su impacto en el tiempo de optimización y en el consumo energético, su comparación con la formulación exacta del problema y qué metodología conviene según el tipo de red.
+	\item El \textbf{Capítulo~\ref{cap:con}} expone las conclusiones y las líneas de trabajo futuro.
+\end{itemize}
+
+Finalmente, el Anexo~\ref{anx:topologias} muestra la estructura de las topologías de la evaluación principal.

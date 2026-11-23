@@ -1,0 +1,375 @@
+\chapter{Materiales y métodos}\label{cap:mat}
+
+Este capítulo reúne lo necesario para entender y reproducir los experimentos: con qué equipos y herramientas se ha trabajado (Sección~\ref{sec:entorno}), cómo funciona ENERO (Sección~\ref{sec:enero}), qué datos y topologías se usan (Sección~\ref{sec:datos}), cómo está construido el entorno de simulación (Sección~\ref{sec:gymgraph}) y el agente (Sección~\ref{sec:agente}), con qué se comparan los modelos comprimidos y el propio ENERO, incluida la formulación exacta del problema (Sección~\ref{sec:referencias}), y cómo se miden (Sección~\ref{sec:metricas}).
+
+% =====================================================================
+\section{Entorno de trabajo}\label{sec:entorno}
+
+\subsection{Hardware}\label{sec:hardware}
+
+El trabajo se ha realizado con dos equipos, cuyas características se resumen en la Tabla~\ref{tab:hardware}. Ninguno dispone de una GPU compatible con TensorFlow, por lo que todo el entrenamiento y la inferencia se ejecutan en CPU.
+
+\begin{table}[H]
+	\centering
+	\small
+	\begin{adjustbox}{max width=\textwidth}
+	\begin{tabular}{p{2.8cm}p{4.6cm}p{4.6cm}}
+		\toprule
+		& \textbf{Equipo A (portátil)} & \textbf{Equipo B (HP)} \\
+		\midrule
+		Procesador & AMD Ryzen 7 4800H (8 núcleos, 16 hilos, 2,9--4,2~GHz) & Intel Core i5-1135G7 (4 núcleos, 8 hilos, 2,4--4,2~GHz) \\
+		Potencia de diseño (TDP) & 45~W & 12--28~W (configurable) \\
+		Memoria RAM & 16~GB & 8~GB \\
+		GPU & AMD Radeon RX 5500M (no utilizada) & Intel Iris Xe integrada (no utilizada) \\
+		Sistema operativo & Windows 11 & Windows 11 \\
+		\midrule
+		Uso & Entrenamiento del agente base, compresión y mediciones finales & Redacción, desarrollo de scripts y evaluaciones preliminares mientras el equipo A entrenaba \\
+		\bottomrule
+	\end{tabular}
+	\end{adjustbox}
+	\caption{Equipos utilizados en el trabajo.}
+	\label{tab:hardware}
+\end{table}
+
+Todos los resultados finales del Capítulo~\ref{cap:pru} se obtienen en el equipo A y, salvo los tiempos de las tres semillas adicionales del estudiante (Sección~\ref{sec:res_calidad}), sin otras cargas de trabajo en ejecución, para que las medidas de tiempo y energía sean comparables. El equipo B solo se ha utilizado para depurar los scripts y obtener resultados provisionales. La ausencia de GPU alarga el entrenamiento, pero no afecta a las conclusiones sobre la compresión, ya que el escenario de interés es precisamente la ejecución del agente en hardware de propósito general.
+
+\subsection{Software}\label{sec:software}
+
+El desarrollo se ha realizado en Python, dentro de un entorno virtual de Anaconda, con Visual Studio Code como entorno de programación. La Tabla~\ref{tab:software} recoge las bibliotecas principales (aunque se utilizan más). Se utilizan versiones concretas, y no necesariamente las más recientes, porque el código de ENERO depende de la API de TensorFlow 2.x anterior a Keras~3.
+
+\begin{table}[H]
+	\centering
+	\small
+	\begin{adjustbox}{max width=\textwidth}
+	\begin{tabular}{p{4.2cm}p{2.2cm}p{6.2cm}}
+		\toprule
+		\textbf{Biblioteca} & \textbf{Versión} & \textbf{Uso} \\
+		\midrule
+		Python (Anaconda) & 3.10.19 & Lenguaje de desarrollo y gestión del entorno \\
+		TensorFlow (\texttt{tensorflow-cpu}) y Keras & 2.10.0 & Definición, entrenamiento e inferencia del actor y del crítico \\
+		TensorFlow Lite & (incluida en TF) & Conversión y cuantización de modelos \\
+		Gymnasium & 1.2.3 & Interfaz del entorno de simulación \\
+		NetworkX & 3.2.1 & Representación de topologías y cálculo de caminos \\
+		PuLP (con el \textit{solver} CBC) & 3.2.2 & Resolución de la cota de programación lineal \\
+		NumPy / SciPy & 1.26.4 / 1.13.1 & Cálculo numérico, contrastes estadísticos y resolución del MILP con HiGHS \cite{virtanen2020scipy,huangfu2018parallelizing} \\
+		Pandas & 2.3.0 & Análisis de resultados \\
+		Matplotlib / Seaborn & 3.9.4 / 0.13.2 & Generación de figuras \\
+		\bottomrule
+	\end{tabular}
+	\end{adjustbox}
+	\caption{Bibliotecas software utilizadas.}
+	\label{tab:software}
+\end{table}
+
+El código desarrollado, junto con el fichero de dependencias, se publica en un repositorio: \url{https://github.com/maarino02/enero-drl-compression}.
+
+% =====================================================================
+\section{El caso de uso: ENERO}\label{sec:enero}
+
+ENERO (\textit{Efficient real-time WAN routing optimization with Deep Reinforcement Learning}) \cite{ALMASAN2022109166} es un optimizador de ingeniería de tráfico para redes WAN que combina un agente DRL con una LS. Su código es público y constituye el punto de partida de este trabajo.
+
+\subsection{Funcionamiento}
+
+ENERO minimiza la MLU (Sección~\ref{sec:mlu}) mediante enrutamiento por punto intermedio sobre \textit{Segment Routing} (Sección~\ref{sec:sr}): cada demanda puede desviarse, como máximo, por un nodo intermedio. Está pensado para integrarse en un controlador SDN, que lo ejecuta cada vez que detecta un cambio relevante en la red, como una nueva matriz de tráfico o un fallo de enlace. El proceso consta de cuatro pasos:
+
+\begin{enumerate}
+	\item \textbf{Configuración inicial}. Todas las demandas se enrutan por el camino más corto, como haría OSPF.
+	\item \textbf{Selección de demandas críticas}. Reconfigurar todas las demandas sería demasiado costoso, porque su número crece con el cuadrado del número de nodos. ENERO toma las demandas que atraviesan los cinco enlaces más cargados, las ordena por ancho de banda y se queda con las mayores, hasta un 15\,\% del total de demandas. Los autores eligieron este porcentaje tras comparar varios valores (10, 15, 20 y 50\,\%) en experimentos preliminares, en los que ofreció la mejor relación entre calidad y tiempo de cálculo. Se trata, por tanto, de un valor empírico: el artículo no detalla en qué topologías se realizó esa comparación, y el porcentaje más adecuado podría depender del tamaño y de la estructura de la red. En este trabajo se mantiene el 15\,\% en todas las topologías, como en el artículo original.
+	\item \textbf{Etapa DRL}. El agente recorre las demandas críticas una a una y elige para cada una un nodo intermedio, lo que modifica la carga de la red antes de pasar a la siguiente. Se guarda la mejor configuración encontrada durante el recorrido.
+	\item \textbf{Etapa de LS}. Una heurística de ascenso de colinas (\textit{hill climbing}) parte de esa mejor configuración y prueba cambios de nodo intermedio en las demandas críticas, aceptando solo los que reducen la MLU, hasta que no encuentra ninguna mejora.
+\end{enumerate}
+
+Como la configuración que se conserva en la etapa DRL es la mejor de todo el recorrido, y el recorrido empieza en la configuración de OSPF, esa configuración nunca tiene una MLU mayor que la de OSPF. Y como la LS solo acepta cambios que reducen la MLU, la solución final de ENERO tampoco puede empeorar a OSPF. En su evaluación, los autores muestran que ENERO obtiene soluciones de calidad cercana a métodos de programación con restricciones como DEFO \cite{hartert2015declarative} con tiempos inferiores al minuto, y que generaliza a topologías no vistas durante el entrenamiento gracias a la GNN.
+
+\subsection{Relación con este trabajo}
+
+Este trabajo parte del código original de ENERO: su entorno de simulación, la arquitectura del actor y del crítico, el bucle de entrenamiento con PPO, la LS y el conjunto de datos. Ese código se ha modificado de forma considerable. Las aportaciones propias son:
+
+\begin{itemize}
+	\item La migración del entorno de OpenAI Gym a Gymnasium y la adaptación del entrenamiento para ejecutarse de forma estable y más rápida en CPU (Secciones~\ref{sec:migracion} y~\ref{sec:ejecucion}).
+	\item La incorporación de normalización de capa en la GNN y un nuevo conjunto de hiperparámetros para el agente base.
+	\item Un término de dispersión de la carga añadido a la recompensa de ENERO, que en el original solo mide la reducción de la MLU, y la corrección del sesgo que introducía su primera implementación (Sección~\ref{sec:analisis_recompensa}).
+	\item Las tres técnicas de compresión, la cota de programación lineal, la formulación exacta del enrutamiento por punto intermedio y los scripts de evaluación con las métricas de la Sección~\ref{sec:metricas}.
+\end{itemize}
+
+El artículo original compara ENERO con otros optimizadores, como DEFO o la heurística SAP. Este trabajo no repite esa comparación, porque su pregunta principal es otra: qué parte de la calidad de ENERO se conserva cuando se reduce el coste del agente y en qué condiciones compensa cada técnica de compresión. Para responderla, cada modelo comprimido se compara con el original y con tres referencias sencillas: OSPF, la LS sin agente y una cota de programación lineal que indica el margen de mejora teórico. Además, para valorar si el agente, comprimido o no, compensa en la práctica, se compara con la formulación exacta del mismo problema de enrutamiento por punto intermedio (Sección~\ref{sec:referencias}).
+
+% =====================================================================
+\section{Conjunto de datos y topologías}\label{sec:datos}
+
+Se utiliza el conjunto de datos publicado con ENERO \cite{ALMASAN2022109166}. Las topologías proceden de Topology Zoo, una colección de redes reales de operadores, y cada una se modela como un grafo dirigido en el que cada enlace físico da lugar a dos enlaces, uno por sentido. Para cada una de las tres topologías de entrenamiento hay 150 matrices de tráfico, cuyos anchos de banda se generan con una distribución uniforme entre 0,5 y 1 y se escalan a las unidades de la capacidad de los enlaces. El conjunto de datos de ENERO las divide en dos particiones: 100 matrices de entrenamiento (\texttt{TRAIN}) y 50 de evaluación (\texttt{EVALUATE}). Como se explica al final de esta sección, el nombre de la segunda puede llevar a confusión: en las topologías de entrenamiento, esas 50 matrices no se usan como conjunto de prueba, sino de validación.
+
+Con estas matrices, el enrutamiento de OSPF lleva el enlace más cargado por encima de su capacidad en la mayoría de los casos: en las matrices de validación, la MLU media de OSPF es de 1,124. Se trata, por tanto, de escenarios de sobrecarga, en los que el reparto del tráfico tiene un efecto apreciable. El simulador trabaja con cargas agregadas y no modela las pérdidas de paquetes, de modo que una MLU superior a 1 indica sobrecarga, pero no tiene más consecuencias en la simulación. Como todos los métodos se comparan sobre las mismas matrices, los resultados se expresan como reducción relativa de la MLU respecto a OSPF, que no depende de la escala absoluta de la carga.
+
+La Tabla~\ref{tab:topologias} recoge las topologías utilizadas. El agente se entrena con las mismas tres que en el artículo original y la evaluación principal se hace en otras tres, no vistas durante el entrenamiento, cuya estructura se muestra en el Anexo~\ref{anx:topologias}.
+
+Como extensión respecto al trabajo original, se añadieron siete topologías más, de 30 a 43 nodos, del mismo conjunto de datos. En su evaluación más amplia, los autores de ENERO utilizaron las topologías de Topology Zoo con hasta 30 nodos y 100 enlaces \cite{ALMASAN2022109166}, por lo que estas redes quedan, salvo la de 30 nodos, fuera del rango evaluado en el artículo. Su objetivo es medir la generalización del agente, original y comprimido, a redes más grandes que las de entrenamiento, y comprobar cómo evoluciona su distancia a la cota de programación lineal a medida que crece la red, una comparación que el artículo original no incluye. Se eligieron para cubrir el intervalo de tamaños disponible, con dos redes del mismo número de nodos y densidad muy distinta. Algunas candidatas se descartaron porque su enlace más cargado no tiene camino alternativo: es un puente, cuya eliminación dejaría la red dividida en dos. En ellas, todo el tráfico que satura ese enlace está obligado a pasar por él, ningún método puede bajar la MLU de OSPF y, por tanto, no sirven para comparar. Es la misma situación que el artículo original señala en las topologías en anillo, estrella o línea, en las que no hay margen de optimización.
+
+\begin{table}[H]
+	\centering
+	\small
+	\begin{adjustbox}{max width=\textwidth}
+	\begin{tabular}{lccc}
+		\toprule
+		\textbf{Topología} & \textbf{Nodos} & \textbf{Enlaces dirigidos} & \textbf{Uso} \\
+		\midrule
+		BtAsiaPac & 20 & 62 & Entrenamiento \\
+		Garr199905 & 23 & 50 & Entrenamiento \\
+		Goodnet & 17 & 62 & Entrenamiento \\
+		\midrule
+		EliBackbone & 20 & 60 & Evaluación \\
+		HurricaneElectric & 24 & 74 & Evaluación \\
+		Janetbackbone & 29 & 90 & Evaluación \\
+		\midrule
+		WideJpn, GtsPoland, Bics & 30, 33, 33 & 66, 74, 96 & Redes mayores \\
+		Evolink, Cesnet200511 & 37, 39 & 90, 88 & Redes mayores \\
+		LambdaNet, Sanet & 42, 43 & 92, 90 & Redes mayores \\
+		\bottomrule
+	\end{tabular}
+	\end{adjustbox}
+	\caption{Topologías utilizadas para el entrenamiento, la evaluación principal y la evaluación en redes mayores.}
+	\label{tab:topologias}
+\end{table}
+
+Los datos se dividen en tres conjuntos independientes, con la función habitual en aprendizaje automático de entrenamiento, validación y prueba (\textit{test}):
+
+\begin{itemize}
+	\item \textbf{Entrenamiento}: las 100 matrices de la partición \texttt{TRAIN} de las tres topologías de entrenamiento (BtAsiaPac, Garr199905 y Goodnet). Son las únicas con las que el agente aprende, y también las que se usan para reentrenar los modelos podados, destilar el estudiante y medir la fidelidad de la cuantización.
+	\item \textbf{Validación}: las matrices 0 a 19 de la partición \texttt{EVALUATE} de esas mismas tres topologías (60 en total). No se usan para aprender, sino para seguir el entrenamiento al final de cada episodio y elegir los mejores modelos. Para la elección final del modelo base se usan además las matrices 20 a 49 de esa partición, que no intervienen en el seguimiento (Sección~\ref{sec:res_seleccion}).
+	\item \textbf{Prueba}: las 50 matrices de \texttt{EVALUATE} de las tres topologías de evaluación (EliBackbone, HurricaneElectric y Janetbackbone) y 10 matrices de cada una de las siete redes mayores. Estas topologías no intervienen en ninguna fase del entrenamiento, de la compresión ni de la selección de modelos, y con ellas se obtienen los resultados de las Secciones~\ref{sec:res_calidad} y~\ref{sec:res_mayores}.
+\end{itemize}
+
+Esta separación es importante. El conjunto de validación no se usa para aprender, pero guía el entrenamiento: con él se eligen el mejor modelo y su configuración, de modo que un resultado medido sobre él tiende a ser optimista. Por eso hace falta además un conjunto de prueba independiente, que no intervenga en ninguna decisión. El esquema de dos particiones de ENERO no hace esta distinción: el nombre \texttt{EVALUATE} sugiere que esas matrices sirven para evaluar el agente, cuando en su entrenamiento se usan para seguir el aprendizaje y elegir el modelo, es decir, como validación. En este trabajo, la prueba se hace siempre en topologías distintas de las de entrenamiento, lo que además es una prueba más exigente: no mide solo cómo se comporta el agente ante nuevas matrices de tráfico, sino también su capacidad de generalizar a redes que no ha visto.
+
+% =====================================================================
+\section{Entorno de simulación: gym-graph}\label{sec:gymgraph}
+
+El paquete \texttt{gym-graph} implementa los entornos de simulación de ENERO con la interfaz estándar de Gymnasium: un método \texttt{reset()} que inicia un episodio y un método \texttt{step(acción)} que aplica una acción y devuelve el nuevo estado y la recompensa. En este trabajo se usan dos tipos de entorno, que comparten el mismo modelo de red: el del agente DRL y el de la LS.
+
+Cada entorno se identifica por el nombre con el que se registra en Gymnasium (\texttt{GraphEnv-v}$N$). Este nombre no corresponde a una versión de la biblioteca, sino a una variante del entorno dentro del paquete. Los entornos \texttt{GraphEnv-v15} y \texttt{GraphEnv-v16} proceden del código original de ENERO; \texttt{GraphEnv-v17} se ha creado en este trabajo a partir de \texttt{GraphEnv-v16}.
+
+\subsection{Modelo común de la red}
+
+Al generar un entorno se carga la topología y se calcula el camino más corto entre cada par de nodos. Todos los enlaces tienen el mismo peso, de modo que el camino más corto es el de menor número de saltos, y se usa un único camino por par: cuando hay varios igual de cortos se toma el primero, sin repartir el tráfico entre ellos como haría el mecanismo ECMP (\textit{Equal-Cost Multi-Path}). Este es el enrutamiento que se denomina OSPF en el resto del trabajo.
+
+Después se precalcula, para cada par origen-destino, la lista de nodos intermedios candidatos. Se excluyen el propio origen, los nodos cuyo camino pasaría de nuevo por el origen o el destino, formando un bucle, y los que darían exactamente el mismo camino que otro candidato, de modo que cada acción corresponde a un camino distinto. Al iniciar un episodio, el entorno carga una matriz de tráfico, enruta todas las demandas por el camino más corto y selecciona las demandas críticas (Sección~\ref{sec:enero}).
+
+\subsection{Entorno del agente DRL}\label{sec:env17}
+
+Un episodio corresponde a la optimización de una matriz de tráfico y tiene un paso por cada demanda crítica:
+
+\begin{itemize}
+	\item \textbf{Estado}. Antes de cada paso, el entorno retira de la red la demanda crítica que se va a reubicar. El estado es el grafo de enlaces con tres características por enlace: su utilización ($u_e = L_e/c_e$), su capacidad y el ancho de banda de la demanda en los enlaces por los que pasaría. Esta última es la que distingue una acción de otra: para cada candidato se construye una copia del grafo con los enlaces de su camino marcados.
+	\item \textbf{Acción}. El índice del nodo intermedio elegido entre los candidatos de la demanda.
+	\item \textbf{Transición}. La demanda se enruta por el camino más corto del origen al nodo intermedio y de este al destino, se actualiza la carga y se retira la siguiente demanda crítica. El episodio termina cuando se han reubicado todas.
+	\item \textbf{Recompensa}. En ENERO es solo la reducción de la MLU, multiplicada por 10 \cite{ALMASAN2022109166}. En este trabajo se le añadió un segundo término con la reducción de la desviación típica $\sigma$ de las utilizaciones:
+	\begin{equation}\label{eq:recompensa}
+		r_t = 10\left(\mathrm{MLU}_{t-1} - \mathrm{MLU}_{t}\right) + 10\left(\sigma_{t-1} - \sigma_{t}\right).
+	\end{equation}
+	El primer término premia aliviar el enlace más cargado y el segundo, repartir la carga de forma más uniforme. El factor 10 amplía la escala de unos valores que, si no, serían muy pequeños.
+\end{itemize}
+
+La primera implementación del segundo término, añadida en este trabajo sobre el entorno \texttt{GraphEnv-v16} de ENERO, contenía un error que sesgaba la recompensa. Para entrenar se usa la versión corregida, \texttt{GraphEnv-v17}, idéntica en todo lo demás. Con la corrección, la recompensa de cada paso (Ecuación~\eqref{eq:recompensa}) compara siempre dos estados completos consecutivos. Al sumarla sobre los $N$ pasos de un episodio, los valores intermedios se cancelan dos a dos ($\mathrm{MLU}_1$ aparece con signo negativo en $r_1$ y positivo en $r_2$, y así sucesivamente), y solo quedan el estado inicial, que es la configuración de OSPF, y el final:
+\begin{equation}\label{eq:retorno_v17}
+	G = \sum_{t=1}^{N} r_t = 10\left(\mathrm{MLU}_{\text{OSPF}} - \mathrm{MLU}_{\text{final}}\right) + 10\left(\sigma_{\text{OSPF}} - \sigma_{\text{final}}\right).
+\end{equation}
+Mientras la recompensa de cada paso mide el efecto de una sola decisión, el retorno $G$ mide la mejora total del episodio respecto a OSPF: es positivo si el agente la mejora y negativo si la empeora. El error y su corrección se analizan en la Sección~\ref{sec:analisis_recompensa}.
+
+\subsection{Entorno de LS}\label{sec:env15}
+
+El entorno \texttt{GraphEnv-v15} comparte el modelo de red, pero está pensado para la LS. Sobre él se implementa la LS de ENERO: en cada iteración se prueban todos los candidatos de todas las demandas críticas, se aplica el cambio que más reduce la MLU y se repite hasta que ningún cambio la mejora.
+
+% =====================================================================
+\section{Arquitectura del agente}\label{sec:agente}
+
+El agente es un actor-crítico entrenado con PPO (Sección~\ref{sec:ppo}). Tanto el actor como el crítico son GNN de paso de mensajes (Sección~\ref{sec:gnn}) en las que los estados ocultos se asocian a los enlaces y los mensajes se intercambian entre enlaces que comparten un nodo.
+
+\subsection{Actor}
+
+Para decidir el nodo intermedio de una demanda con $K$ candidatos, el actor procesa los $K$ grafos del estado, uno por candidato, en una sola llamada (Figura~\ref{fig:actor}):
+
+\begin{enumerate}
+	\item \textbf{Inicialización}. El estado oculto de cada enlace, de dimensión $d$, se inicializa con sus tres características completadas con ceros.
+	\item \textbf{Paso de mensajes}. Durante $T$ iteraciones, cada enlace calcula un mensaje para cada enlace vecino con una capa densa; los mensajes recibidos se suman y el estado se actualiza con una celda GRU seguida de una normalización de capa (\textit{Layer Normalization}), que estabiliza el entrenamiento.
+	\item \textbf{Lectura}. Los estados finales de los enlaces de cada grafo se suman y pasan por un perceptrón multicapa de $L$ capas ocultas con activación SELU, que produce un \textit{logit} por candidato.
+	\item \textbf{Política}. Una \textit{softmax} sobre los $K$ \textit{logits} da la probabilidad de cada candidato. Durante el entrenamiento la acción se muestrea de esta distribución; en evaluación se elige la más probable.
+\end{enumerate}
+
+\begin{figure}[H]
+	\centering
+	% adjustbox (entorno) en lugar de \resizebox: no lee la figura como argumento,
+	% así la biblioteca babel de TikZ puede desactivar los atajos < > del español
+	\begin{adjustbox}{width=\textwidth}
+\begin{tikzpicture}[
+	font=\small,
+	>={Stealth[length=2.2mm]},
+	blk/.style={draw, rounded corners=2pt, align=center, minimum height=0.9cm, inner sep=3pt, fill=white},
+	gnn/.style={blk, fill=gray!12, minimum width=2.1cm},
+	nd/.style={circle, draw, fill=white, inner sep=0pt, minimum size=4pt},
+	lk/.style={gray!70},
+	pk/.style={black, line width=1.3pt},
+	lab/.style={font=\footnotesize, align=center}
+	]
+	% ----- Grafos candidatos (K copias) -----
+	\foreach \k/\y/\sh in {1/1.5/0, 2/0/1, K/-2.1/2} {
+		\begin{scope}[shift={(0,\y)}]
+			\draw[rounded corners=2pt, fill=gray!4] (-0.15,-0.55) rectangle (1.75,0.55);
+			\coordinate (a) at (0.05,0.3);  \coordinate (b) at (0.6,0.4);
+			\coordinate (c) at (1.2,0.3);   \coordinate (d) at (1.55,-0.2);
+			\coordinate (e) at (0.9,-0.35); \coordinate (f) at (0.25,-0.3);
+			\draw[lk] (a)--(b)--(c)--(d)--(e)--(f)--(a) (b)--(e) (c)--(e);
+			\ifnum\sh=0 \draw[pk] (a)--(b)--(c); \fi
+			\ifnum\sh=1 \draw[pk] (a)--(f)--(e)--(c); \fi
+			\ifnum\sh=2 \draw[pk] (a)--(b)--(e)--(c); \fi
+			\foreach \p in {a,b,c,d,e,f} \node[nd] at (\p) {};
+			\node[lab, anchor=east] at (-0.2,0) {$m_{\k}$};
+			\coordinate (g\k) at (1.75,0);
+		\end{scope}
+	}
+	\node[font=\large] at (0.8,-1.0) {$\vdots$};
+	\node[lab, above] at (0.8,2.1) {Estado por candidato\\(camino marcado)};
+
+	% ----- GNN -----
+	\node[gnn] (msg) at (4.1,1.1) {Mensaje\\[-1pt]{\footnotesize densa $2d\!\rightarrow\! d$}};
+	\node[gnn] (agg) at (4.1,-0.2) {Suma de\\[-1pt]mensajes};
+	\node[gnn] (upd) at (4.1,-1.5) {GRU +\\[-1pt]LayerNorm};
+	\draw[->] (msg) -- (agg);
+	\draw[->] (agg) -- (upd);
+	\draw[->] (upd.east) -- ++(0.3,0) |- (msg.east);
+	\node[lab, fill=white, inner sep=1pt] at (5.55,-0.2) {$\times T$};
+	\begin{scope}[on background layer]
+		\node[draw, dashed, rounded corners=4pt, fit=(msg)(agg)(upd), inner xsep=24pt, inner ysep=8pt, label={[lab]above:GNN (paso de mensajes\\ entre enlaces)}] (gnnbox) {};
+	\end{scope}
+	\foreach \k in {1,2,K} \draw[->] (g\k) -- (gnnbox.west |- g\k);
+
+	% ----- Lectura -----
+	\node[blk, minimum width=1.5cm] (sum) at (7.65,0) {$\sum$ enlaces\\[-1pt]{\footnotesize por grafo}};
+	\node[blk, minimum width=1.5cm] (mlp) at (9.85,0) {MLP\\[-1pt]{\footnotesize $L$ capas SELU}};
+	\draw[->] (gnnbox.east |- sum) -- (sum);
+	\draw[->] (sum) -- (mlp);
+
+	% ----- Logits y softmax -----
+	\node[lab] (z) at (11.45,0) {$z_1$\\[-2pt]$z_2$\\[-2pt]$\vdots$\\[-2pt]$z_K$};
+	\draw[->] (mlp) -- (z);
+	\node[blk, minimum width=1.3cm] (sm) at (12.85,0) {softmax};
+	\draw[->] (z) -- (sm);
+	\node[lab, below=0.25cm of sm] {$\pi(m_k \mid s)$};
+
+	% ----- Nota de parámetros compartidos -----
+	\node[lab, text width=6.3cm] at (9.2,-2.1) {Los mismos pesos se aplican a los $K$ grafos, que se procesan en una sola llamada al actor.};
+\end{tikzpicture}
+	\end{adjustbox}
+	\caption[Esquema de la arquitectura del actor]{Esquema de la arquitectura del actor. Para cada nodo intermedio candidato $m_k$ se construye un grafo en el que se marcan los enlaces del camino resultante (en trazo grueso). La GNN actualiza el estado de cada enlace durante $T$ iteraciones, la lectura produce un \textit{logit} $z_k$ por grafo y la \textit{softmax} los convierte en la probabilidad de elegir cada candidato.}
+	\label{fig:actor}
+\end{figure}
+
+El crítico tiene la misma estructura, pero procesa un único grafo, el estado sin ninguna acción marcada, y su salida estima el valor $V(s)$. Como los parámetros son compartidos por todos los enlaces y grafos, su número no depende de la topología; el coste de una decisión, en cambio, crece con $K \cdot |E| \cdot T$ y con el tamaño de las capas.
+
+\subsection{Tamaño del modelo base}
+
+La Tabla~\ref{tab:parametros_actor} desglosa los parámetros del actor base, con $d = 32$, $T = 8$ iteraciones y $L = 4$ capas de lectura de 32 neuronas. En coma flotante de 32 bits, sus pesos ocupan unos 50~KB. Este modelo es el punto de partida de todas las técnicas de compresión.
+
+\begin{table}[H]
+	\centering
+	\small
+	\begin{tabular}{lr}
+		\toprule
+		\textbf{Bloque} & \textbf{Parámetros} \\
+		\midrule
+		Función de mensaje (capa densa $2d \rightarrow d$) & 2\,080 \\
+		Actualización (celda GRU) & 6\,336 \\
+		Normalización de capa & 64 \\
+		Lectura (4 capas densas de 32 neuronas) & 4\,224 \\
+		Capa de salida & 33 \\
+		\midrule
+		\textbf{Total} & \textbf{12\,737} \\
+		\bottomrule
+	\end{tabular}
+	\caption{Parámetros del actor base.}
+	\label{tab:parametros_actor}
+\end{table}
+
+% =====================================================================
+\section{Métodos de referencia}\label{sec:referencias}
+
+Los modelos comprimidos se comparan con el modelo original y con las siguientes referencias:
+
+\begin{itemize}
+	\item \textbf{OSPF}: todas las demandas por el camino más corto. Es la configuración de partida y el mínimo que cualquier método debe mejorar.
+	\item \textbf{LS desde OSPF}: la LS aplicada directamente a la configuración de OSPF, sin agente. Permite valorar cuánto aporta el agente a la solución.
+	\item \textbf{ENERO completo (DRL + LS)}: cada agente, original o comprimido, seguido de la LS. Es el uso real del agente en el sistema.
+	\item \textbf{Cota de programación lineal (LP)}: una referencia del margen de mejora teórico, descrita en la Sección~\ref{sec:lp}.
+	\item \textbf{Formulación exacta (MILP)}: la mejor configuración posible con enrutamiento por punto intermedio, en dos variantes (Sección~\ref{sec:milp}). A diferencia de la cota LP, es una configuración desplegable y, por tanto, una alternativa real a ENERO.
+\end{itemize}
+
+\subsection{Cota de programación lineal}\label{sec:lp}
+
+Para valorar si una MLU es buena o mala hace falta saber cuánto se podría bajar como máximo. Esa referencia la da un problema de programación lineal sencillo: calcular la MLU más baja posible si el tráfico de cada demanda pudiera dividirse libremente entre todos los caminos de la red (Sección~\ref{sec:prog_mat}). Como esa libertad es mayor que la de cualquier esquema real, incluido el de ENERO, ningún método puede bajar de ese valor: es una \emph{cota inferior}. No es una configuración desplegable, pero indica cuánto margen de mejora queda.
+
+Este problema es el de enrutamiento de mínima congestión (\textit{minimum congestion routing}), un caso del problema de flujo multicomodidad \cite{ahuja1993network}, en una formulación de flujo por enlace agregada por nodo, denominada FED2 (formulación flujo-enlace-destino) cuando la agregación se hace por destino \cite{DDR}. En este trabajo se agrega por origen, que es equivalente: solo cambia el sentido en que se expresa la conservación del flujo, y la MLU óptima es la misma. Con la notación de la Sección~\ref{sec:mlu}, sea $f^{s}_{e} \geq 0$ el flujo con origen en el nodo $s$ que atraviesa el enlace $e$, y $b_{s,v}$ la suma de los anchos de banda de las demandas de $s$ a $v$. Agrupar las demandas por origen reduce el número de variables de $|\mathcal{D}|\cdot|E|$ a $|V|\cdot|E|$ sin cambiar el resultado. El problema es:
+\begin{align}
+	\min \quad & \theta \label{eq:lp_obj}\\
+	\text{s.a.} \quad & \sum_{e \in \delta^{+}(v)} f^{s}_{e} - \sum_{e \in \delta^{-}(v)} f^{s}_{e} =
+	\begin{cases}
+		\sum_{w \neq s} b_{s,w} & \text{si } v = s \\
+		-\, b_{s,v} & \text{si } v \neq s
+	\end{cases}
+	&& \forall s, v \in V \label{eq:lp_cons}\\
+	& \sum_{s \in V} f^{s}_{e} \leq \theta\, c_e && \forall e \in E \label{eq:lp_cap}\\
+	& f^{s}_{e} \geq 0,\ \theta \geq 0 && \forall s \in V,\ e \in E,
+\end{align}
+donde $\delta^{+}(v)$ y $\delta^{-}(v)$ son los enlaces que salen de $v$ y los que entran en él. La Ecuación~\eqref{eq:lp_cons} impone que cada origen inyecte todo su tráfico y cada destino reciba el suyo, y la Ecuación~\eqref{eq:lp_cap} limita la carga de cada enlace a $\theta$ veces su capacidad, de modo que el valor óptimo de $\theta$ es la MLU mínima. Se resuelve con el \textit{solver} CBC a través de PuLP.
+
+\subsection{Formulación exacta del enrutamiento por punto intermedio}\label{sec:milp}
+
+La cota LP indica cuánto podría bajar la MLU si el tráfico pudiera dividirse libremente, pero no dice cuál es la mejor configuración que se puede desplegar con un único nodo intermedio por demanda. Esa configuración es la solución de un programa lineal entero mixto (\textit{Mixed Integer Linear Programming}, MILP), el problema que ENERO aborda de forma aproximada. Resolverlo de forma exacta permite saber, por un lado, cuánto se aleja ENERO del óptimo de su propio esquema de enrutamiento y, por otro, si en la práctica un agente entrenado ofrece alguna ventaja frente a un método exacto.
+
+El MILP se formula sobre el mismo modelo de red que el entorno de simulación: los mismos caminos más cortos y los mismos nodos intermedios candidatos de cada demanda, sin bucles ni caminos repetidos (Sección~\ref{sec:gymgraph}). Entre los candidatos está siempre el camino de OSPF. Sea $\mathcal{K} \subseteq \mathcal{D}$ el conjunto de demandas cuyo camino se puede modificar y $M_k$ los nodos intermedios candidatos de la demanda $k \in \mathcal{K}$. La variable binaria $y_{k,m}$ vale 1 si la demanda $k$ se envía por el camino $P_k(m)$ de la Sección~\ref{sec:sr}. Sea $a_{k,m,e}$ el número de veces que ese camino atraviesa el enlace $e$, y $L^{0}_{e}$ la carga que dejan en $e$ las demandas que no se modifican, que siguen su camino de OSPF. El problema es:
+\begin{align}
+	\min \quad & \theta \label{eq:milp_obj}\\
+	\text{s.a.} \quad & \sum_{m \in M_k} y_{k,m} = 1 && \forall k \in \mathcal{K} \label{eq:milp_uno}\\
+	& L^{0}_{e} + \sum_{k \in \mathcal{K}} \sum_{m \in M_k} b_k\, a_{k,m,e}\, y_{k,m} \leq \theta\, c_e && \forall e \in E \label{eq:milp_cap}\\
+	& y_{k,m} \in \{0,1\},\ \theta \geq 0 && \forall k \in \mathcal{K},\ m \in M_k. \nonumber
+\end{align}
+La Ecuación~\eqref{eq:milp_uno} obliga a elegir exactamente un camino para cada demanda modificable, y la Ecuación~\eqref{eq:milp_cap} limita la carga de cada enlace a $\theta$ veces su capacidad, de modo que el valor óptimo de $\theta$ es la MLU mínima que se puede alcanzar. Se consideran dos variantes, que solo se diferencian en el conjunto $\mathcal{K}$:
+\begin{itemize}
+	\item \textbf{MILP sobre las demandas críticas}: $\mathcal{K}$ contiene las mismas demandas críticas que reubica el agente, las que atraviesan los cinco enlaces más cargados con OSPF, hasta el 15\,\% del total (Sección~\ref{sec:enero}). El resto sigue su camino de OSPF. Es el óptimo del espacio de búsqueda de la etapa DRL: el agente decide esas demandas una a una y el MILP las decide todas a la vez, por lo que su resultado es el mejor que podría obtener la etapa DRL con una política perfecta.
+	\item \textbf{MILP sobre todas las demandas}: $\mathcal{K} = \mathcal{D}$. Es el óptimo del enrutamiento por punto intermedio, que ninguna configuración de ENERO puede mejorar. Su tamaño es mucho mayor: en las siete redes mayores tiene entre 18\,794 y 46\,094 variables binarias, frente a las 2818 a 7004 del MILP sobre las demandas críticas.
+\end{itemize}
+
+Ambas variantes se resuelven con el \textit{solver} HiGHS \cite{huangfu2018parallelizing} a través de la función \texttt{milp} de SciPy \cite{virtanen2020scipy}, con un límite de tiempo por matriz. Si se alcanza el límite, el \textit{solver} devuelve la mejor solución entera encontrada y una cota inferior de la MLU óptima, de modo que se conoce cuánto puede alejarse esa solución del óptimo. Cada solución se comprueba aplicándola en el simulador, que reproduce la MLU calculada por el MILP. El tiempo que se mide es el de resolución del \textit{solver}; no incluye la construcción del modelo, que se hace en Python una vez por matriz.
+
+% =====================================================================
+\section{Métricas y protocolo de evaluación}\label{sec:metricas}
+
+\subsection{Coste del modelo}
+
+\begin{itemize}
+	\item \textbf{Parámetros totales y no nulos}. La poda no elimina pesos de las matrices, sino que los pone a cero: la matriz conserva su tamaño, pero muchos de sus valores valen cero y no aportan nada al cálculo. Por eso se cuentan por separado los parámetros totales, que reflejan el tamaño de las matrices, y los no nulos, que son los que realmente quedan tras la poda.
+	\item \textbf{Tamaño de los pesos}. Se mide sobre los pesos del actor, sin comprimir y comprimidos con \texttt{gzip}. Un fichero con muchos ceros se comprime mucho mejor, así que es en el tamaño comprimido donde se aprecia la ganancia de la poda. Para los modelos cuantizados se mide el tamaño del fichero de TensorFlow Lite.
+	\item \textbf{Latencia de inferencia}. Tiempo de una llamada al actor, es decir, de una decisión con sus $K$ candidatos. Se mide solo la red neuronal, sin la construcción del estado, con un temporizador de alta resolución, descartando las 10 primeras llamadas, en las que TensorFlow prepara el grafo de cálculo. Todos los modelos se miden en las mismas condiciones y se comparan dentro de una misma ejecución.
+\end{itemize}
+
+\subsection{Calidad del enrutamiento}
+
+Sea $\mathrm{MLU}_{x}$ la MLU obtenida por el método $x$ en una matriz de tráfico. Para la etapa DRL se toma, como hace ENERO, la mejor configuración alcanzada a lo largo del recorrido del agente. Además de la propia MLU, se utilizan:
+\begin{itemize}
+	\item \textbf{Mejora sobre OSPF}, la reducción porcentual de la MLU respecto a la configuración inicial:
+	\begin{equation}\label{eq:mejora_ospf}
+		\Delta_{\text{OSPF}}(x) = 100 \cdot \frac{\mathrm{MLU}_{\text{OSPF}} - \mathrm{MLU}_{x}}{\mathrm{MLU}_{\text{OSPF}}} \ (\%).
+	\end{equation}
+	\item \textbf{Distancia a la cota LP}, cuánto se aleja el método del mejor valor teórico; cuanto menor, más cerca está del límite:
+	\begin{equation}\label{eq:margen_lp}
+		\Delta_{\text{LP}}(x) = 100 \cdot \frac{\mathrm{MLU}_{x} - \mathrm{MLU}_{\text{LP}}}{\mathrm{MLU}_{\text{LP}}} \ (\%).
+	\end{equation}
+	\item \textbf{Diferencia respecto al original}, $\mathrm{MLU}_{x} - \mathrm{MLU}_{\text{original}}$ en cada matriz, que aísla el efecto de la compresión. Para decidir si es significativa se utiliza la prueba de rangos con signo de Wilcoxon \cite{wilcoxon1945individual} sobre las diferencias emparejadas por matriz, con un nivel de significación de 0,05.
+	\item \textbf{Acuerdo de decisiones}, el porcentaje de pasos en los que el modelo comprimido elige el mismo nodo intermedio que el original ante el mismo estado.
+\end{itemize}
+
+\subsection{Tiempo de optimización y energía}
+
+Para cada matriz se mide también el tiempo completo de la etapa DRL, incluida la construcción de los estados, y el de la LS. Esta separación permite saber qué parte del tiempo total depende realmente del modelo y, por tanto, cuánto puede acelerarse con la compresión. El consumo energético se estima con la Ecuación~\eqref{eq:energia}, con la potencia media de la CPU medida durante el entrenamiento, 23,9~W (Sección~\ref{sec:costes_energia}).
+
+\subsection{Protocolo}
+
+Todos los modelos se evalúan sobre las 50 matrices de evaluación de cada una de las tres topologías de evaluación (150 en total), con la política determinista y en el equipo A. Para cada matriz se calculan también OSPF, la LS desde OSPF, la cota LP y las dos variantes del MILP, con un límite de 10~s por matriz. En las siete redes mayores se sigue el mismo protocolo con 10 matrices por topología, porque cada optimización tarda bastante más, y el MILP se resuelve además con un límite de 60~s. Todas las ejecuciones, incluidas las del MILP, se realizan en el equipo A sin otras cargas.

@@ -1,0 +1,80 @@
+[
+  {
+    "modelo": "Original",
+    "tipo": "tf",
+    "restauracion_ok": true,
+    "parametros": 12737,
+    "no_nulos": 12737,
+    "esparsidad": 0.0,
+    "bytes_fp32": 50948,
+    "bytes_gzip": 47107,
+    "bytes_checkpoint_disco": 164560,
+    "esparsidad_por_matriz": {
+      "FirstLayer/kernel:0": 0.0,
+      "kernel:0": 0.0,
+      "recurrent_kernel:0": 0.0,
+      "bias:0": 0.0,
+      "Readout_1/kernel:0": 0.0,
+      "Readout_2/kernel:0": 0.0,
+      "Readout_3/kernel:0": 0.0,
+      "Readout_4/kernel:0": 0.0,
+      "Readout_Final/kernel:0": 0.0
+    }
+  },
+  {
+    "modelo": "Estudiante",
+    "tipo": "tf",
+    "restauracion_ok": true,
+    "parametros": 2753,
+    "no_nulos": 2753,
+    "esparsidad": 0.0,
+    "bytes_fp32": 11012,
+    "bytes_gzip": 10130,
+    "bytes_checkpoint_disco": 13912,
+    "esparsidad_por_matriz": {
+      "FirstLayer/kernel:0": 0.0,
+      "kernel:0": 0.0,
+      "recurrent_kernel:0": 0.0,
+      "bias:0": 0.0,
+      "Readout_1/kernel:0": 0.0,
+      "Readout_2/kernel:0": 0.0,
+      "Readout_Final/kernel:0": 0.0
+    }
+  },
+  {
+    "modelo": "TFLite_FP32",
+    "tipo": "tflite",
+    "restauracion_ok": true,
+    "parametros": null,
+    "no_nulos": null,
+    "esparsidad": null,
+    "bytes_fp32": null,
+    "bytes_gzip": 85493,
+    "bytes_checkpoint_disco": 136744,
+    "esparsidad_por_matriz": {}
+  },
+  {
+    "modelo": "FP16",
+    "tipo": "tflite",
+    "restauracion_ok": true,
+    "parametros": null,
+    "no_nulos": null,
+    "esparsidad": null,
+    "bytes_fp32": null,
+    "bytes_gzip": 51677,
+    "bytes_checkpoint_disco": 103156,
+    "esparsidad_por_matriz": {}
+  },
+  {
+    "modelo": "INT8_dinamico",
+    "tipo": "tflite",
+    "restauracion_ok": true,
+    "parametros": null,
+    "no_nulos": null,
+    "esparsidad": null,
+    "bytes_fp32": null,
+    "bytes_gzip": 28399,
+    "bytes_checkpoint_disco": 82072,
+    "esparsidad_por_matriz": {}
+  }
+]

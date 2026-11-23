@@ -1,0 +1,10 @@
+# Direct dependencies of code/ (versions of the environment used in the thesis: Python 3.10, CPU)
+tensorflow-cpu==2.10.0
+keras==2.10.0
+numpy==1.26.4
+pandas==2.3.0
+scipy==1.13.1
+networkx==3.2.1
+matplotlib==3.9.4
+gymnasium==1.2.3
+PuLP==3.2.2

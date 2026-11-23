@@ -1,0 +1,205 @@
+\chapter{Optimización en redes autónomas}\label{cap:opt}
+
+Este capítulo establece el marco teórico sobre el que se construye el trabajo. En primer lugar, se presenta el concepto de red autónoma y el papel que desempeña la optimización dentro de sus bucles de control (Sección~\ref{sec:redes_autonomas}). A continuación, se formaliza el problema de ingeniería de tráfico en redes WAN, que es el problema concreto que resuelve el caso de uso (Sección~\ref{sec:te}), y se revisan los métodos tradicionales para abordarlo junto con sus limitaciones (Sección~\ref{sec:metodos_trad}). Por último, se introducen los fundamentos del aprendizaje por refuerzo profundo (Sección~\ref{sec:drl}) y de las redes neuronales de grafos (Sección~\ref{sec:gnn}), y se describe cómo ambos se combinan para resolver problemas de ingeniería de tráfico (Sección~\ref{sec:drl_te}).
+
+% =====================================================================
+\section{Redes autónomas}\label{sec:redes_autonomas}
+
+\subsection{Del paradigma manual a la autonomía}
+
+Las redes 5G, y previsiblemente las 6G, conectan muchos más dispositivos que las generaciones anteriores, ofrecen servicios muy distintos entre sí y, en muchos casos, con requisitos de latencia estrictos. Operarlas a mano o con configuraciones estáticas deja de ser viable: hay demasiados parámetros que ajustar y cambian demasiado deprisa. Para abordar este desafío, la industria ha adoptado el paradigma de gestión de redes y servicios \textit{Zero-Touch} (\textit{Zero-Touch Network and Service Management}, ZSM), promovido por el ETSI.
+
+La gestión \textit{Zero-Touch} se entiende como una gestión de red completamente autónoma, aunque sujeta a cierta supervisión humana. Su objetivo es minimizar la intervención de los operadores, evolucionando desde la simple automatización de tareas repetitivas hacia una autonomía completa en la que el sistema se gestiona a sí mismo para cumplir los objetivos de servicio \cite{coronado2022zero}.
+
+\subsection{Intención y propiedades Self-X}
+
+Es importante distinguir entre una red \textit{automatizada} y una red \textit{autónoma}. La automatización ejecuta tareas predefinidas conforme a reglas específicas; la autonomía, en cambio, implica la capacidad de decidir qué acciones tomar y ejecutarlas.
+
+El pilar de esta autonomía es la gestión basada en intenciones (\textit{Intent-Driven Management}). El ETSI define una intención como la especificación de todas las expectativas, incluidos requisitos, objetivos y restricciones, que se proporcionan a un sistema técnico. A diferencia de la gestión tradicional, en la que se indica a la red \textit{cómo} ejecutar una tarea paso a paso, la intención es declarativa: especifica \textit{qué} resultado se desea y deja al sistema autónomo los detalles de su implementación. Esto da al sistema la flexibilidad necesaria para explorar distintas soluciones y elegir la más adecuada sin intervención humana directa \cite{etsi_zsm011}.
+
+La autonomía se materializa a través de un conjunto de capacidades conocidas como propiedades \textit{Self-X}:
+
+\begin{itemize}
+	\item \textit{Self-configuration}: capacidad de desplegar, integrar y configurar automáticamente nuevos componentes o funciones de red, físicos o virtuales, en cuanto se conectan.
+	\item \textit{Self-healing}: capacidad de detectar, diagnosticar y recuperarse de fallos o degradaciones del servicio, aislando el problema y ejecutando acciones correctivas.
+	\item \textit{Self-protection}: capacidad de defender la infraestructura y los datos frente a ataques o accesos no autorizados, identificando patrones anómalos y mitigando amenazas.
+	\item \textit{Self-optimization}: capacidad de monitorizar continuamente el rendimiento y ajustar dinámicamente la asignación de recursos (espectro, potencia, enrutamiento, etc.) para maximizar la eficiencia y cumplir los acuerdos de nivel de servicio (\textit{Service Level Agreements}, SLA) ante las fluctuaciones del tráfico.
+\end{itemize}
+
+Este trabajo se enmarca en la última de ellas: la optimización automática del enrutamiento ante cambios en la demanda de tráfico.
+
+\subsection{Bucles cerrados y el ciclo MAPE-K}\label{sec:mapek}
+
+Para hacer operativas estas propiedades y mantener la red alineada con las intenciones del operador, la arquitectura ZSM se apoya en bucles cerrados de control (\textit{closed loops}). Un bucle cerrado persigue un objetivo concreto monitorizando y regulando de forma continua un conjunto de entidades gestionadas: observa el estado de la red, analiza su discrepancia con la intención, decide las acciones correctivas y las ejecuta \cite{etsi_zsm016}.
+
+El modelo de referencia que describe este comportamiento es el ciclo MAPE-K (\textit{Monitor, Analyze, Plan, Execute, Knowledge}), propuesto originalmente por IBM en el contexto de la computación autonómica \cite{kephart2003vision}. El ciclo descompone la autonomía en cuatro fases que operan sobre una base de conocimiento compartida:
+
+\begin{itemize}
+	\item \textbf{Monitorización}: recogida continua de métricas y telemetría para capturar el estado del sistema.
+	\item \textbf{Análisis}: procesamiento de esos datos para detectar patrones, anomalías o desviaciones respecto a la intención.
+	\item \textbf{Planificación}: selección de las acciones que corrigen el estado de la red. Es aquí donde reside la optimización: ya sea mediante algoritmos exactos, heurísticas o agentes de aprendizaje, el optimizador es el componente que decide qué hacer para cumplir el objetivo.
+	\item \textbf{Ejecución}: aplicación de los cambios de configuración en la infraestructura física o virtual.
+\end{itemize}
+
+El componente de conocimiento almacena tanto el historial de la red como los modelos que guían las decisiones. En el paradigma de las redes definidas por conocimiento (\textit{Knowledge-Defined Networking}, KDN), este plano de conocimiento se apoya en técnicas de aprendizaje automático para que el sistema no solo reaccione, sino que aprenda de experiencias pasadas y mejore sus decisiones futuras \cite{mestres2017knowledge,he2023routing}. Los estándares ZSM reconocen explícitamente la inteligencia artificial como un habilitador de esta automatización y definen servicios de gestión para el entrenamiento, la inferencia y la validación de modelos dentro del ciclo de vida de la red \cite{etsi_zsm012}.
+
+Desde el punto de vista de este trabajo, la consecuencia más relevante del modelo MAPE-K es que la optimización no es una tarea que se ejecute una vez, sino una fase que se repite cada vez que el bucle detecta un cambio. El coste de cada ejecución del optimizador, en tiempo y en energía, se multiplica por el número de veces que se ejecuta el bucle a lo largo de la vida de la red.
+
+% =====================================================================
+\section{Ingeniería de tráfico en redes WAN}\label{sec:te}
+
+Una red autónoma debe resolver problemas de optimización de naturaleza muy diversa. Este trabajo se centra en uno de los más estudiados: la ingeniería de tráfico (\textit{Traffic Engineering}, TE) intradominio en redes de área extensa (WAN), es decir, la decisión de por qué caminos se cursa el tráfico dentro de la red de un operador para aprovechar sus recursos y evitar la congestión.
+
+\subsection{Modelo de red y utilización máxima de enlace}\label{sec:mlu}
+
+La red se modela como un grafo dirigido $G=(V,E)$, donde $V$ es el conjunto de nodos (enrutadores) y $E$ el conjunto de enlaces. Cada enlace físico bidireccional se representa mediante dos enlaces dirigidos, y cada enlace $e \in E$ tiene una capacidad $c_e > 0$. El tráfico se describe mediante una matriz de tráfico (\textit{Traffic Matrix}, TM), que puede verse como un conjunto de demandas $\mathcal{D}$, donde cada demanda $k \in \mathcal{D}$ se caracteriza por un nodo origen $s_k$, un nodo destino $d_k$ y un ancho de banda $b_k$. En una red de $|V|$ nodos puede haber hasta $|V|(|V|-1)$ demandas, un número que crece de forma cuadrática con el tamaño de la red.
+
+Una configuración de enrutamiento asigna a cada demanda uno o varios caminos. Si $x_{k,e} \in [0,1]$ denota la fracción del tráfico de la demanda $k$ que atraviesa el enlace $e$, la carga y la utilización del enlace son:
+\begin{equation}
+	L_e = \sum_{k \in \mathcal{D}} x_{k,e}\, b_k, \qquad u_e = \frac{L_e}{c_e}.
+\end{equation}
+
+Un enlace está congestionado cuando $u_e > 1$, es decir, cuando la carga que recibe supera su capacidad y el exceso de paquetes se descarta. El objetivo clásico de la TE, y el que se adopta en este trabajo siguiendo a \cite{ALMASAN2022109166}, es minimizar la utilización máxima de enlace (\textit{Maximum Link Utilization}, MLU):
+\begin{equation}\label{eq:mlu}
+	\mathrm{MLU} = \max_{e \in E} u_e .
+\end{equation}
+
+La MLU es adimensional, porque es un cociente entre carga y capacidad. En una red bien dimensionada suele mantenerse por debajo de 0,5--0,6, para dejar margen ante picos de tráfico; un valor superior a 1 indica que el enlace más cargado recibe más tráfico del que puede cursar.
+
+Minimizar la MLU equivale a alejar el enlace más cargado de la saturación, lo que reduce el riesgo de congestión y de pérdidas. Es una métrica sencilla e interpretable, aunque solo depende del peor enlace: dos configuraciones con la misma MLU pueden repartir la carga de forma muy distinta en el resto de la red. Por este motivo, es habitual acompañarla de alguna medida de la dispersión de las utilizaciones, como su desviación típica.
+
+\subsection{Enrutamiento por el camino más corto: OSPF}\label{sec:ospf}
+
+En las redes IP, el enrutamiento intradominio suele realizarse con protocolos de estado de enlace como OSPF (\textit{Open Shortest Path First}). Cada enlace tiene asignado un peso y cada enrutador calcula, mediante el algoritmo de Dijkstra, el camino de menor coste hacia cada destino. Cuando existen varios caminos con el mismo coste, el tráfico puede repartirse entre ellos (\textit{Equal-Cost Multi-Path}, ECMP).
+
+OSPF es sencillo, distribuido y robusto, pero no tiene en cuenta la carga: todo el tráfico hacia un destino sigue el mismo camino aunque atraviese enlaces saturados mientras otros permanecen infrautilizados. La única forma de influir en el reparto es modificar los pesos de los enlaces. Sin embargo, encontrar el conjunto de pesos que minimiza la congestión para una matriz de tráfico dada es un problema NP-hard, y los pesos óptimos para una matriz pueden ser malos para otra \cite{fortz2000internet}. Además, cambiar un peso modifica simultáneamente el camino de todas las demandas que atraviesan ese enlace, lo que dificulta un control fino. En este trabajo, OSPF se utiliza como configuración de partida y como referencia mínima que cualquier optimizador debe mejorar.
+
+\subsection{Segment Routing y enrutamiento por punto intermedio}\label{sec:sr}
+
+El enrutamiento por segmentos (\textit{Segment Routing}, SR) permite un control mucho más fino sin sustituir el enrutamiento por el camino más corto \cite{rfc8402}. En SR, el nodo de entrada incluye en la cabecera de cada paquete una lista de segmentos que debe recorrer; dentro de cada segmento, el paquete se encamina por el camino más corto habitual. De esta forma, un controlador centralizado puede desviar una demanda concreta por un nodo determinado sin modificar los pesos de la red ni el camino del resto de demandas.
+
+Un caso particular especialmente útil es el enrutamiento por punto intermedio (\textit{middlepoint routing}), en el que cada demanda se desvía como máximo por un nodo intermedio $m \in V$. El camino resultante es la concatenación del camino más corto de $s_k$ a $m$ y del camino más corto de $m$ a $d_k$:
+\begin{equation}
+	P_k(m) = \mathrm{SP}(s_k, m) \oplus \mathrm{SP}(m, d_k),
+\end{equation}
+donde elegir $m = s_k$ o $m = d_k$ equivale a mantener el camino de OSPF. Se ha demostrado que las rutas de dos segmentos ofrecen flexibilidad suficiente para alcanzar un rendimiento cercano al óptimo en muchas redes \cite{bhatia2015optimized}.
+
+Este planteamiento convierte la TE en un problema combinatorio: para cada demanda hay $|V|$ opciones y el número total de configuraciones posibles es del orden de $|V|^{|\mathcal{D}|}$. Además, las decisiones no son independientes, porque desviar una demanda cambia la carga de los enlaces y, con ello, la conveniencia de desviar las demás. Este es el problema que resuelve ENERO \cite{ALMASAN2022109166}, el caso de uso de este trabajo, descrito en detalle en la Sección~\ref{sec:enero}.
+
+% =====================================================================
+\section{Métodos tradicionales de optimización y sus limitaciones}\label{sec:metodos_trad}
+
+Antes de la irrupción del aprendizaje profundo, la optimización de redes se basaba en técnicas matemáticas y algorítmicas que no requieren entrenamiento, sino que operan con reglas explícitas o modelos definidos por expertos. Para el problema de mínima congestión de la Sección~\ref{sec:mlu}, lo que más condiciona el método es si se admite que el tráfico de una demanda se divida entre varios caminos, caso en el que la programación lineal da la solución óptima, o si, como en una red real, cada demanda sigue un único camino o unos pocos. Para este segundo caso hay métodos exactos (Sección~\ref{sec:prog_mat}), heurísticos (Sección~\ref{sec:heuristicas}) y, más recientemente, basados en aprendizaje por refuerzo (Sección~\ref{sec:drl_te}).
+
+\subsection{Programación matemática}\label{sec:prog_mat}
+
+La aproximación más rigurosa consiste en formular el problema como un programa matemático, con una función objetivo y un conjunto de restricciones sobre variables de decisión \cite{zhu2021network}. Conviene distinguir dos casos, porque su coste es muy diferente:
+
+\begin{itemize}
+	\item Si se permite que el tráfico de cada demanda se reparta de forma arbitraria entre varios caminos, minimizar la MLU es un problema de flujo multicomodidad (\textit{Multi-Commodity Flow}, MCF) que puede formularse como un programa lineal (\textit{Linear Programming}, LP) con variables continuas. Un LP se resuelve en tiempo polinómico, aunque el número de variables crece con el producto del número de demandas y de enlaces, por lo que en redes grandes su resolución puede requerir segundos o más. Existen formulaciones alternativas que reducen ese número, agregando las demandas por destino o limitando cada demanda a un conjunto de caminos predefinidos.
+	\item Si el enrutamiento está restringido a mecanismos realistas, como un único camino por demanda, los pesos de OSPF o el enrutamiento por punto intermedio, aparecen variables enteras y el problema pasa a ser de programación lineal entera (\textit{Integer Linear Programming}, ILP) o normalmente programación lineal entera mixta (\textit{Mixed Integer Linear Programming}, MILP), en general NP-hard. Su tiempo de resolución puede crecer de forma exponencial con el tamaño de la red, aunque los \textit{solvers} actuales resuelven en poco tiempo muchas instancias de tamaño moderado, como se comprueba en la Sección~\ref{sec:res_milp}.
+\end{itemize}
+
+La solución del LP de flujo multicomodidad tiene una propiedad muy útil: como es la relajación de cualquier esquema de enrutamiento más restrictivo, su MLU es una \textbf{cota inferior} de la MLU alcanzable con OSPF, con enrutamiento por punto intermedio o con cualquier otro esquema. Por eso se utiliza en este trabajo como referencia de lo que sería posible en el mejor caso (Sección~\ref{sec:lp}), aunque no sea directamente desplegable.
+
+\subsection{Heurísticas y metaheurísticas}\label{sec:heuristicas}
+
+Para superar las limitaciones de escalabilidad de los métodos exactos, la ingeniería de redes ha recurrido históricamente a heurísticas: algoritmos diseñados por expertos que renuncian a garantizar el óptimo a cambio de encontrar una solución suficientemente buena en un tiempo razonable, a menudo reduciendo el espacio de búsqueda con reglas específicas del problema \cite{meng2020topology}. El propio problema de ajuste de pesos de OSPF se abordó con una heurística de LS \cite{fortz2000internet}.
+
+Las metaheurísticas, como la LS, el recocido simulado, la búsqueda tabú o los algoritmos genéticos, exploran el espacio de soluciones sin depender tanto de la estructura del problema \cite{bello2016neural}. En el ámbito de la TE con \textit{Segment Routing} destaca DEFO \cite{hartert2015declarative}, que utiliza programación con restricciones para encontrar configuraciones de alta calidad. Estos métodos son más flexibles que los exactos, pero su tiempo de ejecución crece rápidamente con el tamaño de la red, requieren un ajuste manual considerable y pueden estancarse en óptimos locales.
+
+\subsection{Limitaciones en redes dinámicas}\label{sec:limitaciones}
+
+Los métodos anteriores han sido la base de la gestión de redes durante décadas, pero presentan tres limitaciones importantes cuando la optimización debe ejecutarse dentro de un bucle cerrado:
+
+\begin{itemize}
+	\item \textbf{Dependencia de modelos explícitos}. La programación matemática y la teoría de control necesitan un modelo analítico del sistema, que a menudo recurre a simplificaciones. Cuando el modelo se aleja de la realidad (interferencias, movilidad, ráfagas de tráfico), la calidad de la solución se degrada \cite{yang2022comparative}.
+	\item \textbf{Coste computacional}. Los métodos exactos con variables enteras y las metaheurísticas escalan mal con el tamaño de la red (Sección~\ref{sec:prog_mat}). En redes grandes, el tiempo que requieren puede ser incompatible con la frecuencia a la que cambia el tráfico \cite{li2023topology}.
+	\item \textbf{Falta de aprendizaje}. Cada nueva matriz de tráfico se resuelve desde cero, sin aprovechar la experiencia acumulada en situaciones anteriores. Los protocolos como OSPF, por su parte, reaccionan con información local y sin capacidad de anticipación \cite{he2023routing,xiao2023cognitive}. En un bucle que debe reaccionar en tiempo real, se requieren métodos capaces de optimizar de forma continua sin recalcular todo ante cada cambio \cite{abo2024toward}.
+\end{itemize}
+
+Estas limitaciones motivan el uso de métodos basados en aprendizaje, y en particular del aprendizaje por refuerzo: un agente puede aprender, mediante interacción con un entorno, una política que proponga buenas configuraciones en un tiempo muy reducido, sin necesidad de un modelo explícito del sistema. El coste se traslada así de la fase de decisión a una fase de entrenamiento previa, que solo se realiza una vez.
+
+% =====================================================================
+\section{Aprendizaje por refuerzo profundo}\label{sec:drl}
+
+El aprendizaje por refuerzo (\textit{Reinforcement Learning}, RL) es la rama del aprendizaje automático que estudia cómo un agente aprende a tomar decisiones secuenciales mediante la interacción con un entorno, guiado por una señal de recompensa \cite{sutton2018reinforcement}. A diferencia del aprendizaje supervisado, no necesita ejemplos etiquetados con la decisión correcta, que en la operación de redes serían muy costosos de obtener: le basta con poder evaluar las consecuencias de sus acciones.
+
+\subsection{Procesos de decisión de Markov}
+
+El problema se formaliza como un proceso de decisión de Markov (\textit{Markov Decision Process}, MDP), definido por la tupla $(\mathcal{S}, \mathcal{A}, P, R, \gamma)$: un conjunto de estados $\mathcal{S}$, un conjunto de acciones $\mathcal{A}$, una función de transición $P(s' \mid s, a)$, una función de recompensa $R(s,a)$ y un factor de descuento $\gamma \in [0,1)$. En cada instante $t$, el agente observa el estado $s_t$, elige una acción $a_t$ según su política $\pi(a \mid s)$, recibe una recompensa $r_t$ y el entorno pasa a un nuevo estado $s_{t+1}$. El objetivo es encontrar la política que maximiza el retorno esperado:
+\begin{equation}\label{eq:retorno}
+	G_t = \sum_{i=0}^{\infty} \gamma^{i}\, r_{t+i}, \qquad \pi^{*} = \arg\max_{\pi}\, \mathbb{E}_{\pi}\left[ G_0 \right].
+\end{equation}
+
+Para valorar estados y acciones se definen la función de valor $V^{\pi}(s) = \mathbb{E}_{\pi}[G_t \mid s_t = s]$, que mide el retorno esperado desde un estado, y la función de valor de acción $Q^{\pi}(s,a) = \mathbb{E}_{\pi}[G_t \mid s_t = s, a_t = a]$. Su diferencia, la \textit{ventaja} $A^{\pi}(s,a) = Q^{\pi}(s,a) - V^{\pi}(s)$, indica cuánto mejor es una acción que el comportamiento medio de la política en ese estado.
+
+Los métodos que se estudian en este trabajo son \textit{model-free}: el agente no conoce ni intenta aprender $P$, sino que aprende directamente la política o las funciones de valor a partir de las transiciones que observa. En el caso de la TE, esto significa que el agente no necesita un modelo analítico de la red, solo un entorno (real o simulado) que le devuelva el nuevo estado de carga y la recompensa tras cada decisión.
+
+\subsection{Del aprendizaje por refuerzo al DRL}\label{sec:actor_critico}
+
+Cuando el espacio de estados es grande o continuo, como ocurre con el estado de carga de una red, no es posible representar la política o las funciones de valor mediante tablas. El aprendizaje por refuerzo profundo (\textit{Deep Reinforcement Learning}, DRL) utiliza redes neuronales profundas como aproximadores de estas funciones. Su éxito en tareas de gran complejidad, como el control de videojuegos a partir de píxeles \cite{mnih2015human}, impulsó su aplicación a numerosos problemas de ingeniería, entre ellos la optimización de redes \cite{he2023routing,abo2024toward}.
+
+Existen dos grandes familias de métodos. Los métodos basados en valor, como DQN \cite{mnih2015human}, aprenden $Q(s,a)$ y eligen la acción de mayor valor. Los métodos de gradiente de política, en cambio, parametrizan directamente la política $\pi_\theta$ mediante una red neuronal de parámetros $\theta$ y la mejoran siguiendo el gradiente del retorno esperado:
+\begin{equation}\label{eq:policy_gradient}
+	\nabla_\theta J(\theta) = \mathbb{E}_{\pi_\theta}\left[ \nabla_\theta \log \pi_\theta(a_t \mid s_t)\, \hat{A}_t \right],
+\end{equation}
+donde $\hat{A}_t$ es una estimación de la ventaja. Los métodos \textbf{actor-crítico} combinan ambas ideas mediante dos redes: el \textit{actor}, que implementa la política $\pi_\theta$ y decide las acciones, y el \textit{crítico}, que estima la función de valor $V_\phi(s)$ y se utiliza para calcular $\hat{A}_t$, reduciendo la varianza del gradiente.
+
+Esta separación tiene una consecuencia importante para este trabajo: el crítico solo se necesita durante el entrenamiento. Una vez desplegado, el agente toma decisiones utilizando únicamente el actor, por lo que es el actor el que determina el coste de inferencia y el que tiene sentido comprimir.
+
+\subsection{Proximal Policy Optimization}\label{sec:ppo}
+
+\textit{Proximal Policy Optimization} (PPO) \cite{schulman2017proximal} es uno de los algoritmos actor-crítico más utilizados por su estabilidad y sencillez, y es el que emplea ENERO. Los métodos de gradiente de política son sensibles al tamaño de cada actualización: un paso demasiado grande puede alejar la política de la región en la que se recogieron los datos y degradarla de forma irreversible. PPO limita este efecto mediante un objetivo recortado. Sea
+\begin{equation}
+	\rho_t(\theta) = \frac{\pi_\theta(a_t \mid s_t)}{\pi_{\theta_{\text{old}}}(a_t \mid s_t)}
+\end{equation}
+el cociente entre la probabilidad de la acción con la política actual y con la política que recogió los datos. PPO maximiza:
+\begin{equation}\label{eq:ppo_clip}
+	L^{\text{CLIP}}(\theta) = \mathbb{E}_t\left[ \min\left( \rho_t(\theta)\,\hat{A}_t,\ \operatorname{clip}\left(\rho_t(\theta), 1-\epsilon, 1+\epsilon\right)\hat{A}_t \right) \right],
+\end{equation}
+donde $\epsilon$ (típicamente 0,1--0,2) acota cuánto puede cambiar la probabilidad de cada acción en una actualización. Gracias a ello, los mismos datos pueden reutilizarse durante varias épocas de optimización con minilotes.
+
+La función de pérdida completa combina el objetivo del actor, el error cuadrático del crítico y un término de entropía que favorece la exploración:
+\begin{equation}\label{eq:ppo_loss}
+	L(\theta, \phi) = -L^{\text{CLIP}}(\theta) + c_1\, \mathbb{E}_t\left[ \left(V_\phi(s_t) - \hat{G}_t\right)^2 \right] - c_2\, \mathbb{E}_t\left[ \mathcal{H}\left(\pi_\theta(\cdot \mid s_t)\right) \right],
+\end{equation}
+donde $\hat{G}_t$ es el retorno estimado, $\mathcal{H}$ es la entropía de la distribución de acciones y $c_1$, $c_2$ son coeficientes de ponderación.
+
+La ventaja se estima habitualmente con el estimador GAE (\textit{Generalized Advantage Estimation}) \cite{schulman2016high}, que combina diferencias temporales de distintos horizontes:
+\begin{equation}\label{eq:gae}
+	\delta_t = r_t + \gamma V_\phi(s_{t+1}) - V_\phi(s_t), \qquad \hat{A}_t = \sum_{i=0}^{\infty} (\gamma\lambda)^{i}\, \delta_{t+i},
+\end{equation}
+donde $\lambda \in [0,1]$ regula el compromiso entre sesgo y varianza. Los valores concretos de estos hiperparámetros en el entrenamiento del agente base se detallan en la Sección~\ref{sec:hiperparametros_base}.
+
+% =====================================================================
+\section{Redes neuronales de grafos}\label{sec:gnn}
+
+Las redes neuronales convencionales, como los perceptrones multicapa o las redes convolucionales, esperan entradas de tamaño y estructura fijos. Una red de comunicaciones, en cambio, es un grafo cuyo número de nodos y enlaces varía de una topología a otra. Las redes neuronales de grafos (\textit{Graph Neural Networks}, GNN) \cite{scarselli2009graph} están diseñadas para procesar directamente este tipo de datos.
+
+\subsection{Paso de mensajes}\label{sec:mpnn}
+
+La formulación más extendida es la de paso de mensajes (\textit{Message Passing Neural Network}, MPNN) \cite{gilmer2017neural}. Cada elemento del grafo $v$ tiene asociado un estado oculto $h_v$, inicializado a partir de sus características. Durante $T$ iteraciones, cada elemento recibe mensajes de sus vecinos $\mathcal{N}(v)$ y actualiza su estado:
+\begin{align}
+	m_v^{(t+1)} &= \sum_{w \in \mathcal{N}(v)} M\left(h_v^{(t)}, h_w^{(t)}\right), \label{eq:mp_msg}\\
+	h_v^{(t+1)} &= U\left(h_v^{(t)}, m_v^{(t+1)}\right), \label{eq:mp_upd}
+\end{align}
+donde $M$ es la función de mensaje y $U$ la función de actualización, ambas implementadas con redes neuronales (por ejemplo, una capa densa y una celda recurrente GRU). Tras las $T$ iteraciones, una función de lectura (\textit{readout}) $R$ agrega los estados de todos los elementos y produce la salida:
+\begin{equation}\label{eq:readout}
+	y = R\left(\left\{ h_v^{(T)} \mid v \in G \right\}\right).
+\end{equation}
+
+Esta formulación tiene dos propiedades clave. Las funciones $M$, $U$ y $R$ son las mismas para todos los elementos, por lo que el número de parámetros no depende del tamaño del grafo y un mismo modelo puede aplicarse a topologías distintas. Además, al agregar mediante sumas, el resultado no depende del orden en que se numeren los elementos. Como contrapartida, el coste de inferencia sí crece con el tamaño del grafo y con el número de iteraciones $T$: cada iteración aplica $M$ y $U$ a todos los elementos.
+
+\subsection{GNN en redes de comunicaciones}
+
+Las GNN se han consolidado como la herramienta de referencia para modelar redes de comunicaciones. RouteNet \cite{rusek2020routenet}, por ejemplo, utiliza paso de mensajes entre enlaces y caminos para estimar el retardo y las pérdidas de una configuración, y generaliza a topologías no vistas durante el entrenamiento. En los problemas de enrutamiento es habitual asociar los estados ocultos a los \textit{enlaces}, cuyas características (capacidad, utilización) son las que determinan la congestión, e intercambiar mensajes entre enlaces vecinos. Esta es la representación que utiliza el agente de ENERO, descrito en la Sección~\ref{sec:agente}.
+
+% =====================================================================
+\section{Aprendizaje por refuerzo aplicado a la ingeniería de tráfico}\label{sec:drl_te}
+
+La naturaleza secuencial de muchas decisiones de red, en las que cada acción modifica el estado sobre el que se toman las siguientes, encaja de forma natural con el DRL. Se han propuesto agentes de DRL para el enrutamiento en redes definidas por conocimiento \cite{he2023routing} y para el enrutamiento cognitivo en redes autónomas \cite{xiao2023cognitive}, entre otros. Sin embargo, los agentes basados en redes neuronales convencionales tienen dificultades para generalizar a topologías distintas de las de entrenamiento, ya que su entrada tiene un tamaño fijo ligado a una red concreta.
+
+La combinación de DRL y GNN resuelve esta limitación. ENERO \cite{ALMASAN2022109166} aborda el problema de TE con enrutamiento por punto intermedio (Sección~\ref{sec:sr}) en dos etapas. En la primera, un agente DRL entrenado con PPO recorre las demandas críticas, que son una fracción de las demandas que atraviesan los enlaces más cargados, y asigna a cada una un nodo intermedio. Para elegirlo, el actor evalúa la GNN sobre una copia del grafo por cada nodo intermedio candidato, en la que se marcan los enlaces del camino resultante, y obtiene una distribución de probabilidad sobre las acciones. En la segunda etapa, una LS refina la solución. El agente parte siempre de la configuración de OSPF y, si no consigue mejorarla, se conserva la configuración inicial, lo que garantiza que el resultado nunca es peor que el de partida.
+
+Este diseño tiene una implicación directa sobre el coste de inferencia. Si una optimización reubica $D_c$ demandas críticas en una red de $|V|$ nodos, el actor realiza del orden de $D_c \cdot |V|$ pasadas por la GNN, cada una con $T$ iteraciones de paso de mensajes sobre todos los enlaces del grafo. El tiempo de la fase neuronal crece, por tanto, con el tamaño de la red y con el tamaño del propio modelo, y se repite en cada ejecución del bucle de control (Sección~\ref{sec:mapek}). Reducir el coste de cada pasada mediante la compresión del actor, sin degradar la calidad de sus decisiones, es el objetivo del resto de este trabajo. Las técnicas disponibles para ello se revisan en el Capítulo~\ref{cap:comp}.

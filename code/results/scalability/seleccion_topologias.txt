@@ -1,0 +1,20 @@
+Comprobacion previa (6/10/2026): MLU media de OSPF frente a la cota LP en las TMs 0-2.
+Si coinciden, el enlace mas cargado es un puente y ningun metodo puede mejorar: se descarta.
+
+Arn             N=30 E=58 OSPF=1.152 LP=1.152 margen_LP=0.0%   DESCARTADA
+Cynet           N=30 E=58 OSPF=1.154 LP=1.154 margen_LP=0.0%   DESCARTADA
+Ernet           N=30 E=64 OSPF=1.172 LP=1.024 margen_LP=12.6%
+Renater2004     N=30 E=72 OSPF=1.143 LP=0.427 margen_LP=62.6%
+WideJpn         N=30 E=66 OSPF=1.164 LP=0.745 margen_LP=36.0%  ELEGIDA
+Bics            N=33 E=96 OSPF=1.160 LP=0.814 margen_LP=29.8%  ELEGIDA (densa)
+Renater2006     N=33 E=86 OSPF=1.124 LP=0.602 margen_LP=46.4%
+Renater2008     N=33 E=86 OSPF=1.105 LP=0.602 margen_LP=45.5%
+GtsPoland       N=33 E=74 OSPF=1.125 LP=0.732 margen_LP=35.0%  ELEGIDA (dispersa)
+Reuna           N=37 E=72 OSPF=1.156 LP=1.156 margen_LP=0.0%   DESCARTADA
+Evolink         N=37 E=90 OSPF=1.159 LP=0.965 margen_LP=16.7%  ELEGIDA
+Cesnet200511    N=39 E=88 OSPF=1.154 LP=0.569 margen_LP=50.7%  ELEGIDA
+LambdaNet       N=42 E=92 OSPF=1.151 LP=0.952 margen_LP=17.3%  ELEGIDA
+Litnet          N=43 E=86 OSPF=1.146 LP=1.013 margen_LP=11.6%
+Sanet           N=43 E=90 OSPF=1.122 LP=0.954 margen_LP=15.0%  ELEGIDA
+Carnet          N=44 E=86 OSPF=1.153 LP=1.153 margen_LP=0.0%   DESCARTADA
+BtLatinAmerica  N=45 E=100 OSPF=1.160 LP=1.160 margen_LP=0.0%  DESCARTADA

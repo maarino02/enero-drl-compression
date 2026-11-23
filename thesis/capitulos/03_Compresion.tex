@@ -1,0 +1,164 @@
+\chapter{Compresión en Deep Reinforcement Learning}\label{cap:comp}
+
+Las redes neuronales profundas permiten a los agentes de DRL aprender políticas de control sofisticadas, pero su ejecución tiene un coste en memoria, tiempo de cálculo y energía. En el caso de un optimizador de red como ENERO, ese coste se paga en cada ejecución del bucle de control y crece con el tamaño de la red (Sección~\ref{sec:drl_te}). Además, la posibilidad de ejecutar estos agentes en equipos con recursos limitados, más cerca de los elementos de red que controlan, y la preocupación por el consumo energético de las redes y de los propios modelos de aprendizaje hacen deseable que sean lo más ligeros posible.
+
+La compresión de redes neuronales agrupa un conjunto de técnicas que reducen el tamaño y el coste de ejecución de un modelo tratando de conservar su comportamiento \cite{han2016deep}. Casi todas nacieron en el aprendizaje supervisado, así que el capítulo empieza por lo que cambia al aplicarlas a un agente de DRL (Sección~\ref{sec:comp_part}). Después describe las tres familias que se usan en el trabajo, la poda, la cuantización y la destilación de conocimiento (Secciones~\ref{sec:poda} a~\ref{sec:kd}), resume la relación con la eficiencia energética (Sección~\ref{sec:comp_green}), y termina con una comparación de las tres técnicas (Sección~\ref{sec:comp_sintesis}).
+
+% =====================================================================
+\section{Particularidades de la compresión de agentes DRL}\label{sec:comp_part}
+
+La mayoría de las técnicas de compresión se desarrollaron para modelos de aprendizaje supervisado, como los clasificadores de imágenes. Aplicarlas a un agente de DRL es posible, pero conviene tener en cuenta varias diferencias.
+
+\textbf{Solo se comprime el actor.} En un agente actor-crítico, el crítico solo interviene durante el entrenamiento (Sección~\ref{sec:actor_critico}). La inferencia, que es la fase que se repite en operación, depende únicamente del actor, que es el modelo sobre el que tiene sentido actuar.
+
+\textbf{La métrica relevante es la calidad de la tarea, no la precisión.} En un clasificador, la compresión se evalúa comparando la precisión antes y después. En un agente de DRL no existe una etiqueta correcta para cada estado: lo que importa es la calidad del resultado final de la secuencia de decisiones, que en este trabajo es la MLU alcanzada. Dos políticas pueden elegir acciones distintas en algunos estados y llegar a soluciones igual de buenas, y una pequeña diferencia en las probabilidades puede no cambiar la acción elegida.
+
+\textbf{Los errores se propagan a lo largo del episodio.} Las decisiones del agente son secuenciales: cada acción modifica el estado sobre el que se toma la siguiente. Una decisión distinta en un paso temprano lleva al agente comprimido a estados que el modelo original nunca visitó, en los que su comportamiento puede alejarse aún más del original. Por ello, la calidad de un agente comprimido debe medirse ejecutando episodios completos y no solo comparando salidas sobre estados aislados.
+
+\textbf{El reentrenamiento es más delicado.} Algunas técnicas necesitan reentrenar el modelo tras comprimirlo. En DRL, ese reentrenamiento se realiza con el propio algoritmo de aprendizaje por refuerzo, cuyos datos dependen de la política que se está modificando y cuyas actualizaciones son más ruidosas que las de un problema supervisado \cite{graesser2022state}.
+
+\textbf{El beneficio depende del hardware.} Reducir el número de parámetros, el número de bits o las operaciones de un modelo no se traduce automáticamente en menor latencia o consumo: depende de que el hardware y las bibliotecas de inferencia sepan aprovechar la estructura resultante \cite{hoefler2021sparsity}. Por eso, en este trabajo se distinguen explícitamente el tamaño del modelo, el número de parámetros y la latencia medida.
+
+% =====================================================================
+\section{Poda}\label{sec:poda}
+
+La poda (\textit{pruning}) elimina los parámetros de la red que menos contribuyen a su salida. La idea se remonta a los primeros trabajos sobre redes neuronales \cite{lecun1990optimal} y cobró relevancia con el aprendizaje profundo al demostrarse que muchas redes pueden reducirse en un orden de magnitud sin pérdida apreciable de precisión \cite{han2015learning}.
+
+\subsection{Criterio y granularidad}
+
+Formalmente, la poda de una matriz de pesos $W$ se expresa mediante una máscara binaria $M$ del mismo tamaño:
+\begin{equation}\label{eq:mascara}
+	\tilde{W} = W \odot M, \qquad M_{ij} \in \{0,1\},
+\end{equation}
+donde $\odot$ es el producto elemento a elemento. El nivel de dispersión (\textit{sparsity}) $s$ es la fracción de elementos de $M$ iguales a cero. El criterio más sencillo y extendido es la \textbf{poda por magnitud}, que elimina los pesos de menor valor absoluto, bajo la hipótesis de que son los que menos influyen en la salida \cite{han2015learning}.
+
+Según la granularidad, se distingue entre:
+\begin{itemize}
+	\item \textbf{Poda no estructurada}, que elimina pesos individuales en cualquier posición. Es la más flexible y la que mejor conserva la calidad del modelo para un mismo nivel de dispersión, pero produce matrices dispersas con ceros repartidos irregularmente.
+	\item \textbf{Poda estructurada}, que elimina bloques completos, como neuronas, filtros o canales. Produce matrices densas más pequeñas, que cualquier hardware procesa más rápido, pero suele degradar más el modelo para una misma reducción.
+\end{itemize}
+
+\subsection{Poda gradual y reentrenamiento}
+
+Eliminar de golpe una fracción grande de los pesos suele degradar el modelo. Por ello, lo habitual es combinar la poda con un reentrenamiento (\textit{fine-tuning}) que permite a los pesos restantes compensar los eliminados, y aplicar la poda de forma gradual. Zhu y Gupta \cite{zhu2017prune} proponen aumentar la dispersión desde un valor inicial $s_i$ hasta un valor final $s_f$ a lo largo de $n$ pasos de poda separados por $\Delta t$ iteraciones:
+\begin{equation}\label{eq:poda_gradual}
+	s_t = s_f + (s_i - s_f)\left(1 - \frac{t - t_0}{n\,\Delta t}\right)^{3},
+\end{equation}
+de modo que la poda es rápida al principio, cuando hay muchos pesos redundantes, y más lenta al final. Una alternativa más sencilla es fijar desde el inicio la dispersión objetivo (dispersión constante) y dejar que el reentrenamiento recupere la calidad. La biblioteca \textit{TensorFlow Model Optimization} implementa ambas estrategias, aunque en este trabajo no pudo usarse con el actor de ENERO y la poda se programó a mano (Sección~\ref{sec:flujo_poda}).
+
+\subsection{Poda en DRL}
+
+La poda se ha aplicado con éxito a agentes de DRL. Ivanov et al. \cite{ivanov2025neural} estudian la poda y la cuantización en algoritmos como DQN y SAC y muestran que es posible reducir el tamaño de las redes hasta 400 veces manteniendo un rendimiento aceptable. Graesser et al. \cite{graesser2022state} analizan sistemáticamente la poda y el entrenamiento disperso en DRL y observan que la poda gradual por magnitud es uno de los métodos más robustos, aunque el comportamiento es más sensible a la tarea y a la arquitectura que en aprendizaje supervisado.
+
+\subsection{Beneficio real de la poda}
+
+La poda no estructurada reduce el número de parámetros no nulos, pero no el tamaño de las matrices. En memoria y en disco, un modelo podado solo ocupa menos si se almacena en un formato disperso o comprimido, que aprovecha la abundancia de ceros. En cuanto a la latencia, las bibliotecas de inferencia de propósito general realizan los productos matriciales de forma densa, multiplicando también por los ceros, por lo que un modelo con poda no estructurada se ejecuta en CPU prácticamente igual de rápido que el original. Las aceleraciones solo aparecen con núcleos de cálculo dispersos específicos, con hardware preparado para explotar la dispersión o con niveles de dispersión muy elevados \cite{hoefler2021sparsity}, algo que hay que tener presente al leer los resultados de la Sección~\ref{sec:res_coste}.
+
+% =====================================================================
+\section{Cuantización}\label{sec:cuantizacion}
+
+La cuantización reduce la precisión numérica con la que se representan los pesos y, opcionalmente, las activaciones de la red. En lugar de números en coma flotante de 32 bits (FP32), se utilizan formatos de menor precisión, como coma flotante de 16 bits (FP16) o enteros de 8 bits (INT8) \cite{jacob2018quantization,nagel2021white}.
+
+\subsection{Cuantización afín uniforme}
+
+El esquema más utilizado es la cuantización afín uniforme, que relaciona cada valor real $r$ con un entero $q$ mediante una escala $S$ y un punto cero $Z$ \cite{jacob2018quantization}:
+\begin{equation}\label{eq:cuant_afin}
+	r \approx S\,(q - Z), \qquad q = \operatorname{clamp}\left(\operatorname{round}\left(\frac{r}{S}\right) + Z,\ q_{\min},\ q_{\max}\right).
+\end{equation}
+Para enteros de 8 bits, $[q_{\min}, q_{\max}] = [-128, 127]$ o $[0, 255]$. La escala se elige a partir del rango de valores $[r_{\min}, r_{\max}]$ que se quiere representar, $S = (r_{\max} - r_{\min})/(q_{\max} - q_{\min})$, y el punto cero garantiza que el valor real $0$ se represente exactamente. Los parámetros pueden calcularse para todo un tensor o para cada canal de salida por separado, lo que reduce el error cuando los rangos de los canales son muy diferentes.
+
+El paso a INT8 reduce el tamaño de los pesos a la cuarta parte y permite utilizar aritmética entera, más rápida y eficiente en muchos procesadores. A cambio, introduce un error de redondeo y, si el rango está mal elegido, un error de saturación. Una reducción excesiva de la precisión puede hacer que el agente deje de distinguir entre estados parecidos o entre acciones con valores próximos \cite{ivanov2025neural}.
+
+\subsection{Cuantización posterior al entrenamiento y durante el entrenamiento}
+
+Existen dos enfoques principales \cite{nagel2021white}:
+\begin{itemize}
+	\item La \textbf{cuantización posterior al entrenamiento} (\textit{Post-Training Quantization}, PTQ) convierte un modelo ya entrenado sin volver a entrenarlo. Es rápida y no necesita el proceso de aprendizaje original, lo que la hace especialmente atractiva en DRL.
+	\item La \textbf{cuantización durante el entrenamiento} (\textit{Quantization-Aware Training}, QAT) simula el efecto de la cuantización durante el entrenamiento para que el modelo aprenda a tolerarla. Suele conservar mejor la calidad con pocos bits, pero exige reentrenar.
+\end{itemize}
+
+Dentro de la PTQ, las herramientas de inferencia como TensorFlow Lite ofrecen varias variantes \cite{tflite_ptq}, que se diferencian en qué se cuantiza:
+\begin{itemize}
+	\item \textbf{Rango dinámico}: los pesos se almacenan en INT8 y las activaciones se cuantizan sobre la marcha durante la inferencia, a partir de su rango observado en cada ejecución. No requiere datos de calibración.
+	\item \textbf{FP16}: los pesos se almacenan en coma flotante de 16 bits, lo que reduce el tamaño a la mitad con una pérdida de precisión normalmente despreciable. En CPU los valores suelen convertirse a FP32 antes de operar, por lo que su ventaja principal es el tamaño y no la velocidad.
+\end{itemize}
+
+\subsection{Cuantización en DRL}
+
+El estudio QuaRL \cite{krishnan2022quarl} evalúa sistemáticamente la cuantización en distintos algoritmos y entornos de DRL. Sus resultados indican que la cuantización posterior al entrenamiento a 8 bits degrada poco el rendimiento de la mayoría de las políticas, mientras que con menos bits es necesario recurrir a QAT. Los autores muestran además que la cuantización reduce el tiempo de ejecución y el consumo de los agentes en plataformas con recursos limitados.
+
+% =====================================================================
+\section{Destilación de conocimiento}\label{sec:kd}
+
+La destilación de conocimiento (\textit{Knowledge Distillation}, KD) transfiere el comportamiento de un modelo grande, el \textit{maestro}, a otro más pequeño, el \textit{estudiante}, entrenando a este último para imitar las salidas del primero \cite{hinton2015distilling,gou2021knowledge}. A diferencia de la poda y la cuantización, que modifican los parámetros de un modelo existente, la destilación permite elegir libremente la arquitectura del estudiante. Es, por tanto, la única de las tres técnicas que reduce el número de operaciones densas y, con ello, la latencia en cualquier hardware.
+
+\subsection{Formulación}
+
+Sea $z$ el vector de \textit{logits} (salidas previas a la función \textit{softmax}) de un modelo. La destilación utiliza una \textit{softmax} con temperatura $\tau$:
+\begin{equation}\label{eq:softmax_temp}
+	p_i^{\tau} = \frac{\exp(z_i / \tau)}{\sum_j \exp(z_j / \tau)} .
+\end{equation}
+Con $\tau = 1$ se obtiene la \textit{softmax} habitual; con $\tau > 1$ la distribución se suaviza y deja ver cómo valora el maestro las opciones que no son la mejor, información que Hinton et al. denominan \textit{conocimiento oscuro} (\textit{dark knowledge}) \cite{hinton2015distilling}. La pérdida de destilación mide la discrepancia entre las distribuciones suavizadas del maestro, $p^{\tau}_{T}$, y del estudiante, $p^{\tau}_{S}$, mediante la divergencia de Kullback-Leibler:
+\begin{equation}\label{eq:kd_loss}
+	\mathcal{L}_{\text{KD}} = \tau^{2}\, \mathrm{KL}\left(p^{\tau}_{T} \,\middle\|\, p^{\tau}_{S}\right) = \tau^{2} \sum_i p^{\tau}_{T,i} \log \frac{p^{\tau}_{T,i}}{p^{\tau}_{S,i}} .
+\end{equation}
+El factor $\tau^{2}$ compensa que los gradientes de la pérdida suavizada escalan como $1/\tau^{2}$, de modo que su magnitud no dependa de la temperatura elegida. En aprendizaje supervisado, esta pérdida suele combinarse con la pérdida habitual respecto a las etiquetas reales \cite{hinton2015distilling}:
+\begin{equation}\label{eq:kd_total}
+	\mathcal{L} = \alpha\, \mathcal{L}_{\text{KD}} + (1 - \alpha)\, \mathcal{L}_{\text{aux}},
+\end{equation}
+donde $\alpha \in [0,1]$ pondera ambos términos.
+
+\subsection{Destilación de políticas}
+
+Rusu et al. \cite{rusu2016policy} trasladaron la destilación al DRL con el nombre de \textit{policy distillation}. En este caso no hay etiquetas reales: el maestro es un agente ya entrenado y el objetivo es que el estudiante reproduzca su política. Los autores compararon varias pérdidas, entre ellas el error cuadrático medio sobre las salidas del maestro y la divergencia KL con temperatura, y obtuvieron estudiantes considerablemente más pequeños que el maestro con un rendimiento similar. En un agente de gradiente de política como el de este trabajo, las salidas del actor son directamente los \textit{logits} de la distribución sobre acciones, por lo que la Ecuación~\eqref{eq:kd_loss} se aplica de forma natural. Como término auxiliar $\mathcal{L}_{\text{aux}}$ puede utilizarse un error cuadrático entre los \textit{logits} del maestro y del estudiante, que obliga a este último a reproducir también su escala y no solo el orden de las acciones.
+
+\subsection{Distribución de los estados de entrenamiento}\label{sec:kd_estados}
+
+Una cuestión específica del DRL es de qué estados se extraen los ejemplos de destilación. Czarnecki et al. \cite{czarnecki2019distilling} distinguen dos opciones:
+\begin{itemize}
+	\item \textbf{Trayectorias guiadas por el maestro}: el entorno avanza con las acciones del maestro y el estudiante aprende a imitarlo en los estados que este visita. Es sencillo y estable, pero el estudiante solo ve estados propios de una buena política: si en operación comete un error y llega a un estado distinto, no ha aprendido qué hacer en él.
+	\item \textbf{Trayectorias guiadas por el estudiante}: el entorno avanza con las acciones del estudiante y el maestro indica en cada estado qué habría hecho. El estudiante aprende así a corregir sus propios errores, a costa de un entrenamiento inicialmente más ruidoso.
+\end{itemize}
+Esta distinción está directamente relacionada con la propagación de errores descrita en la Sección~\ref{sec:comp_part}. La opción adoptada en este trabajo y su justificación se describen en la Sección~\ref{sec:flujo_destilacion}.
+
+\subsection{Diseño del estudiante}\label{sec:kd_estudiante}
+
+La destilación permite reducir el modelo en cualquiera de sus dimensiones. En una GNN de paso de mensajes (Sección~\ref{sec:gnn}), las más relevantes son la dimensión de los estados ocultos, el número de iteraciones $T$ y el número y tamaño de las capas de lectura. Reducir la dimensión disminuye de forma aproximadamente cuadrática el coste de las funciones de mensaje y actualización, y reducir $T$ lo disminuye de forma lineal. Como en ENERO la GNN se evalúa una vez por cada acción candidata (Sección~\ref{sec:drl_te}), cualquier reducción del coste por pasada se multiplica en cada decisión. El límite lo marca la capacidad del estudiante: si es demasiado pequeño, no será capaz de representar la política del maestro.
+
+% =====================================================================
+\section{Compresión y eficiencia energética en redes}\label{sec:comp_green}
+
+El consumo energético de las redes de telecomunicaciones es una preocupación creciente, que ha dado lugar a la línea de investigación conocida como \textit{Green Networking} \cite{bianzino2012survey}. En paralelo, se ha puesto de manifiesto que los modelos de aprendizaje profundo tienen un coste energético considerable, tanto en su entrenamiento como en su uso \cite{strubell2019energy}. Cuando la inteligencia artificial se integra en la operación de la red, ambos costes se suman.
+
+Du et al. \cite{du2020green} analizan esta cuestión para agentes de DRL aplicados a la gestión de recursos radio y proponen la compresión de los algoritmos como una de las vías para lograr un DRL ``verde''. El razonamiento es sencillo: si un agente se ejecuta de forma continua, su consumo es aproximadamente proporcional al tiempo de cálculo acumulado,
+\begin{equation}\label{eq:energia}
+	E \approx P \cdot t_{\text{inf}} \cdot N_{\text{ejec}},
+\end{equation}
+donde $P$ es la potencia del procesador durante el cálculo, $t_{\text{inf}}$ el tiempo de cada ejecución y $N_{\text{ejec}}$ el número de ejecuciones en el periodo considerado. Reducir $t_{\text{inf}}$ mediante la compresión reduce el consumo en la misma proporción, siempre que la potencia no aumente. Este modelo sencillo es el que se utiliza en la Sección~\ref{sec:res_energia} para estimar el impacto energético de cada variante.
+
+% =====================================================================
+\section{Síntesis y elección de técnicas}\label{sec:comp_sintesis}
+
+La Tabla~\ref{tab:comp_tecnicas} resume las características de las tres técnicas aplicadas en este trabajo. Cada una actúa sobre un aspecto distinto del modelo: la poda sobre el número de parámetros, la cuantización sobre su precisión y la destilación sobre la arquitectura. Por ello no son excluyentes y pueden combinarse, aunque en este trabajo se evalúan por separado para aislar el efecto de cada una.
+
+\begin{table}[H]
+	\centering
+	\small
+	\begin{adjustbox}{max width=\textwidth}
+	\begin{tabular}{p{2.2cm}p{2.85cm}p{2.85cm}p{2.85cm}}
+		\hline
+		& \textbf{Poda no estructurada} & \textbf{Cuantización PTQ} & \textbf{Destilación} \\
+		\hline
+		Qué reduce & Parámetros no nulos & Bits por parámetro & Tamaño de la arquitectura \\
+		\hspace{0pt}Reentrenamiento & Sí (con el algoritmo de RL) & No & Sí (entrenamiento supervisado del estudiante) \\
+		Tamaño en disco & Solo en formato disperso o comprimido & Hasta $\times 4$ (INT8) o $\times 2$ (FP16) & Proporcional a la reducción de la arquitectura \\
+		Latencia en CPU & Sin mejora sin núcleos dispersos & Mejora si hay operaciones enteras & Mejora en cualquier hardware \\
+		Riesgo principal & Pérdida de calidad a alta dispersión & Error de redondeo y saturación & Capacidad insuficiente del estudiante \\
+		\hline
+	\end{tabular}
+	\end{adjustbox}
+	\caption{Comparación cualitativa de las técnicas de compresión aplicadas en este trabajo.}
+	\label{tab:comp_tecnicas}
+\end{table}
+
+La implementación y la configuración de cada técnica sobre el actor se describen en la Sección~\ref{sec:flujos_compresion}.

@@ -1,0 +1,237 @@
+\chapter{Desarrollo experimental}\label{cap:exp}
+
+La aplicación de las técnicas de compresión requirió un trabajo previo de adaptación del código de ENERO, con tres objetivos: su compatibilidad con las bibliotecas actuales, la viabilidad del entrenamiento en un ordenador sin GPU en un tiempo razonable y la corrección de la función de recompensa, para que midiera efectivamente el objetivo perseguido. Estas tareas supusieron una parte sustancial del trabajo y se describen en la primera mitad del capítulo: la migración a Gymnasium (Sección~\ref{sec:migracion}), las adaptaciones para el entrenamiento en CPU (Sección~\ref{sec:ejecucion}) y la corrección de la recompensa (Sección~\ref{sec:analisis_recompensa}). La segunda mitad recoge la configuración del entrenamiento del agente base (Sección~\ref{sec:hiperparametros_base}) y la implementación de las tres técnicas de compresión (Sección~\ref{sec:flujos_compresion}).
+
+% =====================================================================
+\section{Migración de Gym a Gymnasium}\label{sec:migracion}
+
+El código de ENERO se desarrolló sobre la biblioteca \texttt{gym} de OpenAI, que dejó de mantenerse y fue sustituida por Gymnasium. Como las versiones actuales de las dependencias ya no son compatibles con \texttt{gym}, el paquete \texttt{gym-graph} y todos los scripts que lo usan se migraron a Gymnasium. Los cambios principales fueron:
+
+\begin{itemize}
+	\item \textbf{Método \texttt{step()}}. Antes devolvía cuatro valores y ahora devuelve cinco, porque Gymnasium distingue entre el final natural del episodio y el corte por límite de pasos.
+	\item \textbf{Método \texttt{reset()}}. Debe aceptar una semilla opcional y devolver \texttt{(obs, info)}.
+	\item \textbf{Espacios de observación y acción}. Gymnasium comprueba que el entorno declare espacios válidos. Como la observación real es un grafo de tamaño variable, se declararon espacios simbólicos compatibles con esas comprobaciones.
+	\item \textbf{Acceso al entorno interno}. \texttt{gymnasium.make()} envuelve el entorno en clases de validación, así que los métodos propios de \texttt{gym-graph} se invocan a través del atributo \texttt{unwrapped}.
+\end{itemize}
+
+Para comprobar que la migración no alteraba el comportamiento, se compararon línea a línea los entornos originales con los migrados. Aparte de los cambios de interfaz y de dos pequeñas correcciones de compatibilidad, una con NetworkX~3 y otra en la ruta de los ficheros, la lógica de simulación es idéntica a la original. El único cambio funcional es deliberado: el término de dispersión añadido a la recompensa (Sección~\ref{sec:analisis_recompensa}).
+
+% =====================================================================
+\section{Ejecución del entrenamiento en CPU}\label{sec:ejecucion}
+
+Sin una GPU compatible, el entrenamiento se ejecuta íntegramente en CPU durante varios días, lo que obligó a introducir varios cambios.
+
+\textbf{Fugas de memoria}. Cuando se ejecutan cientos de episodios en un mismo proceso, TensorFlow acumula memoria que no libera hasta agotar la RAM. Para evitarlo, un script maestro lanza el entrenamiento en tandas de 20 episodios, cada una en un subproceso independiente que guarda los \textit{checkpoints} del actor y del crítico al terminar; al finalizar el subproceso, el sistema operativo libera toda su memoria y el maestro lanza la siguiente tanda. Si una tanda falla, el maestro se detiene para no sobrescribir modelos válidos, y el entrenamiento puede reanudarse en cualquier punto.
+
+\textbf{Ejecución en modo grafo}. El código heredado ejecutaba TensorFlow en modo \textit{eager}, en el que cada operación se lanza por separado desde Python. Es cómodo para depurar, pero muy lento para una red que se evalúa miles de veces por episodio. Como se recoge en la planificación (Sección~\ref{sec:desviaciones}), un primer entrenamiento completo en este modo, con episodios de entre 45 y 57 minutos, ocupó unas dos semanas y dio un agente cuyos resultados no fueron los esperados; además, se había entrenado con la primera versión de la recompensa, que, como se verá, contenía un sesgo. Para el entrenamiento definitivo se activó el modo grafo: la inferencia del actor y del crítico y el paso de optimización se compilan con \texttt{tf.function}, de modo que TensorFlow ejecuta cada llamada como un único grafo de operaciones. Para ello hubo que sustituir algunas operaciones que dependían de valores de Python por sus equivalentes en TensorFlow. Con este cambio, cada episodio pasa de entre 45 y 57 minutos a unos 18, es decir, se ejecuta entre 2,5 y 3 veces más rápido.
+
+\textbf{Otras medidas}. Se desactiva explícitamente la GPU, que no es compatible con TensorFlow; los hiperparámetros principales se pasan como argumentos para poder repetir experimentos con distintas configuraciones, y cada entrenamiento guarda sus modelos y registros en carpetas propias.
+
+% =====================================================================
+\section{Corrección de la función de recompensa}\label{sec:analisis_recompensa}
+
+En ENERO, la recompensa de cada paso es solo la reducción de la MLU, multiplicada por 10 \cite{ALMASAN2022109166}. Esta señal es escasa: la MLU depende únicamente del enlace más cargado, así que la mayoría de las acciones no la modifican y reciben recompensa nula, aunque ayuden a preparar una configuración mejor. Para dar al agente una señal más informativa, en este trabajo se añadió un segundo término que premia repartir la carga de forma más uniforme (Ecuación~\eqref{eq:recompensa}).
+
+Como cada término mide la mejora entre un estado y el siguiente, su suma a lo largo de un episodio debería ser la mejora total respecto al estado inicial, la configuración de OSPF:
+\begin{equation}\label{eq:telescopica}
+	\sum_{t=1}^{N} \left(\mathrm{MLU}_{t-1} - \mathrm{MLU}_{t}\right) = \mathrm{MLU}_0 - \mathrm{MLU}_N .
+\end{equation}
+Esto hace que el retorno sea fácil de interpretar: positivo si el agente mejora a OSPF, negativo si lo empeora y nulo si lo iguala. Pero solo se cumple si cada diferencia se calcula entre estados comparables.
+
+La corrección consiste en calcular la desviación típica previa sobre el estado completo. El entorno corregido, \texttt{GraphEnv-v17}, la guarda tras cada paso, antes de retirar la siguiente demanda, y la usa como $\sigma_{t-1}$ en el paso siguiente. De este modo, las dos desviaciones típicas de cada término se calculan sobre estados equivalentes, el sesgo desaparece y el retorno de cada episodio coincide con la Ecuación~\eqref{eq:retorno_v17}, lo que se comprobó en todos los episodios con un error máximo de $8 \times 10^{-4}$, debido al redondeo. El resto del entorno es idéntico a \texttt{GraphEnv-v16}, el entorno de ENERO sobre el que se añadió el término de dispersión (Sección~\ref{sec:gymgraph}). Un detalle a tener en cuenta es que PPO maximiza la suma \textit{descontada} de recompensas, con $\gamma = 0{,}95$: en episodios de 41 a 76 pasos en las topologías de entrenamiento, lo que ocurre al final pesa poco en esa suma, lo que ayuda a entender algunos comportamientos del agente en la Sección~\ref{sec:res_seleccion}.
+
+% =====================================================================
+\section{Configuración del entrenamiento del agente base}\label{sec:hiperparametros_base}
+
+El agente se entrena con PPO (Sección~\ref{sec:ppo}) sobre las matrices de entrenamiento de BtAsiaPac, Garr199905 y Goodnet. La Tabla~\ref{tab:hiperparametros} recoge la configuración, junto con la del artículo original.
+
+\begin{table}[H]
+	\centering
+	\small
+	\begin{adjustbox}{max width=\textwidth}
+	\begin{tabular}{p{6.2cm}cc}
+		\toprule
+		\textbf{Hiperparámetro} & \textbf{Este trabajo} & \textbf{ENERO \cite{ALMASAN2022109166}} \\
+		\midrule
+		\multicolumn{3}{l}{\textit{Arquitectura}} \\
+		Dimensión del estado de enlace ($d$) & 32 & 20 \\
+		Iteraciones de paso de mensajes ($T$) & 8 & 5 \\
+		Capas ocultas de lectura ($L$) $\times$ neuronas & $4 \times 32$ & $2 \times 20$ \\
+		Normalización de capa en la actualización & Sí & No \\
+		\midrule
+		\multicolumn{3}{l}{\textit{PPO}} \\
+		Tasa de aprendizaje inicial / mínima & $5\times10^{-4}$ / $10^{-5}$ & $2\times10^{-4}$ / $10^{-4}$ \\
+		Decaimiento de la tasa & $\times 0{,}96^{\,e/60}$ (continuo) & $\times 0{,}96$ cada 60 ep. \\
+		Factor de descuento $\gamma$ / parámetro $\lambda$ de GAE & 0,95 / 0,95 & 0,99 / 0,95 \\
+		Recorte $\epsilon$ & 0,2 & 0,1 \\
+		Épocas por actualización / tamaño de minilote & 8 / 32 & 8 / 55 \\
+		Transiciones por actualización (\textit{buffer}) & 835 & 835 \\
+		Coeficiente del crítico $c_1$ & 0,5 & 1 \\
+		Coeficiente de entropía $c_2$ & 0,1 $\rightarrow$ 0,01 (ep. 242) & 0,01 $\rightarrow$ 0,001 (ep. 60) \\
+		Recorte de la norma del gradiente & 0,5 & 0,5 \\
+		\midrule
+		\multicolumn{3}{l}{\textit{Entorno}} \\
+		Porcentaje de demandas críticas & 15\,\% & 15\,\% \\
+		Matrices de validación por topología & 20 & 20 \\
+		\bottomrule
+	\end{tabular}
+	\end{adjustbox}
+	\caption[Configuración del entrenamiento del agente base]{Configuración del entrenamiento del agente base. En el decaimiento de la tasa de aprendizaje, $e$ es el número de episodio.}
+	\label{tab:hiperparametros}
+\end{table}
+
+Los valores de ENERO que no figuran en el artículo se han tomado de su repositorio público. Cada episodio recoge experiencia de varias matrices de las tres topologías hasta llenar el \textit{buffer} de 835 transiciones (el 15\,\% de las demandas de 5 matrices de BtAsiaPac, 4 de Garr199905 y 6 de Goodnet) y después aplica las 8 épocas de PPO.
+
+Respecto a ENERO, se dio más capacidad al modelo (más dimensión, iteraciones y capas de lectura), se añadió normalización de capa para estabilizar la actualización recurrente, y se usaron una tasa de aprendizaje mayor y un coeficiente de entropía más alto durante la mayor parte del entrenamiento para favorecer la exploración. Estos valores se fijaron tras dos entrenamientos preliminares y no son el resultado de una búsqueda sistemática, que no era viable por su coste en tiempo. Un modelo base más grande que el original hace, además, más relevante la compresión posterior. El coeficiente de entropía se mantuvo en 0,1 para que el agente explorase distintos nodos intermedios y se redujo a 0,01 en el episodio 242 para que consolidase la política aprendida.
+
+El entrenamiento se planificó para 300 episodios y se detuvo en el 292 por un problema numérico, descrito a continuación. Los 291 episodios válidos supusieron unas 87 horas de ejecución en el equipo A. Como modelo base para la compresión se eligió el \textit{checkpoint} del episodio 282 (Sección~\ref{sec:res_seleccion}).
+
+\subsection{Implementación del bucle de entrenamiento}\label{sec:codigo_ppo}\label{sec:res_nan}
+
+Cada episodio tiene dos fases. En la primera, el agente recorre matrices de tráfico elegidas al azar, muestrea en cada paso una acción de la distribución del actor y guarda en un \textit{buffer} la entrada, la acción, las probabilidades, el valor del crítico y la recompensa. Con el \textit{buffer} lleno se calculan las ventajas con GAE (Ecuación~\eqref{eq:gae}). En la segunda fase se aplican las 8 épocas de PPO; la pérdida se calcula muestra a muestra, porque cada estado tiene un número distinto de candidatos, y el actor y el crítico comparten un único optimizador Adam. El Código~\ref{lst:ppo} recoge el cálculo para una muestra.
+
+\begin{lstlisting}[style=Python, caption={[Pérdida de PPO para una muestra]Pérdida de PPO para una muestra (\texttt{train\_Enero\_3top\_script\_v2.py}, simplificado).}, label=lst:ppo]
+logits = self.actor(ls, graph_id, first, second, num_edges, training=True)
+probs = tf.nn.softmax(tf.reshape(logits, (1, -1)))
+p_nueva = tf.reduce_sum(old_act * probs[0])        # old_act: accion en one-hot
+p_vieja = tf.reduce_sum(old_act * old_probs)
+ratio = tf.exp(tf.math.log(p_nueva) - tf.math.log(p_vieja))   # sin margen numerico
+perdida = tf.maximum(-ratio * adv,
+                     -tf.clip_by_value(ratio, 1 - eps, 1 + eps) * adv)
+entropia = -tf.reduce_sum(tf.math.log(probs) * probs[0])
+\end{lstlisting}
+
+Las líneas 5 y 8, heredadas de ENERO, son las que provocaron la parada del episodio 292. Tras reducir la entropía, la política se vuelve casi determinista, alguna probabilidad llega a valer cero en coma flotante y su logaritmo es infinito, lo que corrompe los pesos en la actualización. Los \textit{checkpoints} anteriores no se ven afectados. En el reentrenamiento de la poda se añadió un margen numérico, \texttt{tf.math.log(p + 1e-10)}, que evita el problema.
+
+% =====================================================================
+\section{Flujos de compresión}\label{sec:flujos_compresion}\label{sec:hiperparametros_compresion}
+
+Las tres técnicas se aplican por separado al actor del modelo base, para aislar el efecto de cada una; el crítico no se comprime porque no interviene en la inferencia. Todos los modelos comprimidos son \textbf{generales}: los que necesitan entrenamiento usan solo las topologías de entrenamiento del modelo base, de modo que la evaluación del Capítulo~\ref{cap:pru} mide también si conservan su capacidad de generalización.
+
+\subsection{Poda con reentrenamiento}\label{sec:flujo_poda}
+
+La poda es por magnitud y no estructurada: en cada matriz de pesos se ponen a cero los elementos de menor valor absoluto hasta alcanzar el porcentaje deseado. Se aplica a todas las matrices del actor, incluidas las de la celda GRU, que concentran la mitad de los parámetros; los sesgos y la normalización de capa, un 3,3\,\% del total, no se podan.
+
+Para podar se usa una \emph{máscara} por matriz: una matriz del mismo tamaño que la de pesos, con un 0 en las posiciones que se eliminan y un 1 en el resto. Multiplicar los pesos por la máscara pone a cero los pesos podados (Ecuación~\eqref{eq:mascara}). El problema es que, al reentrenar, el optimizador vuelve a modificar todos los pesos, también los que se habían puesto a cero. Por eso la máscara se calcula una sola vez, a partir del modelo base, y se vuelve a aplicar después de cada actualización: así los pesos eliminados siguen valiendo cero durante todo el reentrenamiento y el resto se ajusta para compensar su ausencia (Código~\ref{lst:poda}). La biblioteca TensorFlow Model Optimization hace esto automáticamente, pero no puede aplicarse a la celda GRU tal y como la usa el actor, así que se programó a mano.
+
+\begin{lstlisting}[style=Python, caption={[Máscaras de poda]Construcción y aplicación de las máscaras de poda (\texttt{fine\_tune\_pruned\_v2.py}).}, label=lst:poda]
+def build_masks(model, sparsity):
+    masks = []
+    for v in model.trainable_weights:
+        if len(v.shape) != 2 or 'kernel' not in v.name:
+            continue                    # sesgos y LayerNorm no se podan
+        w = np.abs(v.numpy()).reshape(-1)
+        k = int(round(sparsity * w.size))
+        m = np.ones(w.size, dtype=np.float32)
+        m[np.argsort(w, kind='stable')[:k]] = 0.0   # los k de menor magnitud
+        masks.append((v, tf.constant(m.reshape(v.shape))))
+    return masks
+
+def apply_masks(masks):
+    for v, m in masks:
+        v.assign(v * m)
+
+# en cada paso de PPO, justo despues de actualizar los pesos:
+optimizer.apply_gradients(zip(grads, variables))
+apply_masks(masks)
+\end{lstlisting}
+
+El proceso tiene dos fases. Primero, un \textbf{barrido sin reentrenamiento}: se poda el modelo base al 0, 30, 50, 70, 80 y 90\,\% de cada matriz y se mide su calidad en validación, lo que muestra cuánta redundancia tiene. Después, un \textbf{reentrenamiento} con PPO de 80 episodios. Cada reentrenamiento ocupa el equipo unas 9 horas, así que no era viable hacerlo con todos los niveles y se eligieron dos representativos: el 50\,\%, como poda moderada, y el 90\,\%, como poda extrema para ver hasta dónde se puede llegar.
+
+El reentrenamiento reutiliza el bucle de PPO de la Sección~\ref{sec:codigo_ppo}, partiendo del actor podado y del crítico ya entrenado, con algunos ajustes. Se añade el margen numérico en los logaritmos. La tasa de aprendizaje empieza en $2\times10^{-4}$ y baja de forma suave (decaimiento coseno) hasta $2\times10^{-5}$, para que los primeros episodios corrijan la pérdida causada por la poda y los últimos solo afinen. El coeficiente de entropía baja linealmente de 0,1 a 0,01, es decir, recorre los mismos valores que en el entrenamiento del agente base: empieza con su nivel de exploración, para que el modelo podado pueda buscar alternativas a los pesos que ha perdido, y termina con su nivel de consolidación. Por el coste de cada reentrenamiento no se probaron otros valores. Cada episodio usa 225 transiciones de una sola topología de entrenamiento, que va rotando, y cada 10 episodios se valida con 20 matrices por topología y se conserva el mejor modelo.
+
+\subsection{Cuantización posterior al entrenamiento}\label{sec:flujo_cuantizacion}
+
+La cuantización se hace con el conversor de TensorFlow Lite y genera tres variantes:
+\begin{itemize}
+	\item \textbf{TFLite FP32}: el modelo convertido sin cuantizar. No es un modelo comprimido, sino una referencia que permite separar el efecto del formato del de la cuantización.
+	\item \textbf{FP16}: pesos en coma flotante de 16 bits.
+	\item \textbf{INT8 de rango dinámico}: pesos en enteros de 8 bits; las activaciones se cuantizan durante la inferencia.
+\end{itemize}
+
+Para convertir un modelo hay que decirle al conversor qué forma tienen sus entradas, es decir, cuántas filas y columnas tiene cada una; esa descripción se llama \emph{firma de entrada}. En el actor, el número de filas depende del número de enlaces y de candidatos, que cambia con cada decisión y con cada topología. Por eso se declara como variable (\texttt{None} en el Código~\ref{lst:tflite}): si se fijara, el modelo convertido solo serviría para un tamaño concreto. Las tres variantes salen del mismo conversor cambiando solo las opciones de optimización.
+
+\begin{lstlisting}[style=Python, caption={[Conversión del actor a TensorFlow Lite]Conversión del actor a TensorFlow Lite (\texttt{quantize\_v2.py}, simplificado).}, label=lst:tflite]
+firma = [tf.TensorSpec([None, 32], tf.float32),   # estados de los K*|E| enlaces
+         tf.TensorSpec([None], tf.int32),         # graph_id
+         tf.TensorSpec([None], tf.int32),         # first
+         tf.TensorSpec([None], tf.int32),         # second
+         tf.TensorSpec([], tf.int32)]             # numero total de enlaces
+
+@tf.function(input_signature=firma)
+def forward(ls, gid, first, second, n):
+    return actor(ls, gid, first, second, n, training=False)
+
+conv = tf.lite.TFLiteConverter.from_concrete_functions(
+    [forward.get_concrete_function()], actor)
+if modo != 'fp32':
+    conv.optimizations = [tf.lite.Optimize.DEFAULT]       # INT8 de rango dinamico
+if modo == 'fp16':
+    conv.target_spec.supported_types = [tf.float16]
+modelo_tflite = conv.convert()
+\end{lstlisting}
+
+Antes de la evaluación completa se mide la fidelidad de cada variante frente al modelo original en 120 estados reales de las topologías de entrenamiento: el error medio de sus \textit{logits} y el porcentaje de decisiones que coinciden.
+
+\subsection{Destilación de conocimiento}\label{sec:flujo_destilacion}
+
+El estudiante tiene la misma arquitectura que el actor base con dimensiones reducidas: la dimensión del estado y las iteraciones del paso de mensajes se reducen a la mitad (de 32 a 16 y de 8 a 4) y la lectura pasa de 4 capas de 32 neuronas a 2 de 16. Se eligieron estas reducciones porque actúan directamente sobre las dos fuentes del coste de cada decisión, la dimensión de los estados y el número de iteraciones (Sección~\ref{sec:kd_estudiante}), y dejan un modelo unas 4,6 veces más pequeño (2\,753 parámetros) que conserva la misma estructura. Por limitaciones de tiempo no se probaron otros tamaños.
+
+A diferencia de la poda, la destilación no usa PPO ni recompensas: es un aprendizaje supervisado en el que, para cada estado, la respuesta correcta es la distribución de probabilidad que da el maestro, y el estudiante aprende a reproducirla. El entrenamiento se organiza así:
+\begin{itemize}
+	\item \textbf{Datos}. En cada una de las 40 épocas se recorren 4 matrices de entrenamiento de cada topología. En cada estado se calculan las salidas del maestro y del estudiante, y el entorno avanza con la acción del estudiante con probabilidad 0,5 y con la del maestro en caso contrario. Estas trayectorias mixtas (Sección~\ref{sec:kd_estados}) combinan la estabilidad de seguir al maestro con la exposición del estudiante a los estados a los que le llevan sus propias decisiones.
+	\item \textbf{Pérdida}. La de la Ecuación~\eqref{eq:kd_total}: la divergencia KL entre las distribuciones del maestro y del estudiante, suavizadas con temperatura $\tau$, más un término auxiliar de error cuadrático medio (MSE) entre sus \textit{logits}, ponderados por $\alpha$.
+	\item \textbf{Optimización}. La tasa de aprendizaje empieza en $10^{-3}$, para que el estudiante, que parte de pesos aleatorios, aprenda deprisa al principio, y baja de forma suave (decaimiento coseno) hasta $5\times10^{-5}$, para que los últimos ajustes sean finos. Es una elección habitual en entrenamiento supervisado.
+	\item \textbf{Selección}. Cada 5 épocas se evalúa el estudiante sobre 20 matrices de validación por topología y se conserva el mejor.
+\end{itemize}
+
+El Código~\ref{lst:kd} muestra el paso de entrenamiento y el avance mixto. Maestro y estudiante reciben la misma entrada: como solo las tres primeras columnas del estado de cada enlace tienen información y el resto son ceros de relleno, el estudiante usa las 16 primeras columnas de la entrada del maestro.
+
+\begin{lstlisting}[style=Python, caption={[Paso de destilación y avance mixto]Paso de destilación y avance mixto del entorno (\texttt{distill\_student\_v2.py}, simplificado).}, label=lst:kd]
+@tf.function(experimental_relax_shapes=True)
+def kd_step(q_t, ls, gid, first, second, n):
+    with tf.GradientTape() as tape:
+        q_s = tf.reshape(estudiante(ls, gid, first, second, n, training=True), [-1])
+        p_t = tf.nn.softmax(q_t / tau)
+        kl = tf.reduce_sum(p_t * (tf.nn.log_softmax(q_t / tau)
+                                  - tf.nn.log_softmax(q_s / tau)))
+        mse = tf.reduce_mean(tf.square(q_t - q_s))
+        loss = alpha * tau**2 * kl + (1 - alpha) * mse
+    g = tape.gradient(loss, estudiante.trainable_variables)
+    g, _ = tf.clip_by_global_norm(g, 1.0)
+    opt.apply_gradients(zip(g, estudiante.trainable_variables))
+    return q_s
+
+# dentro del episodio, para cada demanda critica:
+t = build_tensor(env, src, dst, 32)                  # entrada del maestro (d = 32)
+q_t = maestro(t)                                     # logits del maestro
+q_s = kd_step(q_t, t['link_state'][:, :16], ...)     # el estudiante usa d = 16
+a = argmax(q_s) if random.random() < 0.5 else argmax(q_t)
+env.step(a, demanda, src, dst)                       # trayectoria mixta
+\end{lstlisting}
+
+Para fijar $\alpha$ y $\tau$ se probaron tres configuraciones: la inicial ($\alpha = 0{,}7$, con término MSE, y $\tau = 2$) y dos sin término MSE ($\alpha = 1$) con $\tau = 2$ y $\tau = 4$. Sus resultados se analizan en la Sección~\ref{sec:res_destilacion}. Con la configuración elegida se repitió después la destilación con otras tres semillas aleatorias, para comprobar cuánto varía el resultado de un entrenamiento a otro.
+
+\subsection{Resumen de los modelos evaluados}
+
+La Tabla~\ref{tab:modelos_evaluados} resume los modelos que se comparan en el Capítulo~\ref{cap:pru}.
+
+\begin{table}[H]
+	\centering
+	\small
+	\begin{tabular}{p{2.5cm}p{9.0cm}}
+		\toprule
+		\textbf{Modelo} & \textbf{Descripción} \\
+		\midrule
+		Original & Actor base (\textit{checkpoint} 282) en FP32 \\
+		Podado50 & 50\,\% de cada matriz a cero (48,4\,\% del total), reentrenado con PPO \\
+		Podado90 & 90\,\% de cada matriz a cero (87,1\,\% del total), reentrenado con PPO \\
+		Estudiante & $d = 16$, $T = 4$, $2 \times 16$; destilado con $\alpha = 1$ y $\tau = 4$ \\
+		TFLite FP32 & Original convertido a TensorFlow Lite sin cuantizar (referencia) \\
+		FP16 & Pesos en coma flotante de 16 bits \\
+		INT8 dinámico & Cuantización de rango dinámico \\
+		\bottomrule
+	\end{tabular}
+	\caption{Modelos evaluados.}
+	\label{tab:modelos_evaluados}
+\end{table}

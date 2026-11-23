@@ -1,0 +1,2 @@
+topologia;modelo;ospf;drl_mejor;drl_final;drl_hc;lp;ls_solo;acuerdo;t_drl_s;t_hc_s;t_total_s;t_ls_s;t_lp_s;pasos;iter_hc;lat_inv_mediana_ms;mejora_drl_vs_ospf_%;mejora_drlhc_vs_ospf_%;brecha_drl_vs_lp_%;brecha_drlhc_vs_lp_%;lat_mediana_ms;lat_p95_ms
+EliBackbone;Estudiante_s3;1,157239;1,026456;1,0287933333333334;0,6930716666666666;;;;2,0013330000033602;5,951782527999021;7,953115528002382;;;57,0;34,06;3,185777999460697;11,301295583712601;40,109893749980195;;;3,188750008121133;3,984155011130497

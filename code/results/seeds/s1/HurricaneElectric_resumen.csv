@@ -1,0 +1,2 @@
+topologia;modelo;ospf;drl_mejor;drl_final;drl_hc;lp;ls_solo;acuerdo;t_drl_s;t_hc_s;t_total_s;t_ls_s;t_lp_s;pasos;iter_hc;lat_inv_mediana_ms;mejora_drl_vs_ospf_%;mejora_drlhc_vs_ospf_%;brecha_drl_vs_lp_%;brecha_drlhc_vs_lp_%;lat_mediana_ms;lat_p95_ms
+HurricaneElectric;Estudiante_s1;1,1012458666666667;1,0188810666666668;1,5425402666666668;0,7507314666666667;;;;4,346694877999835;14,93320912799798;19,279904005997814;;;83,0;38,86;4,599681998370215;7,479238060552984;31,828895854198592;;;4,597299994202331;5,538584999158046
