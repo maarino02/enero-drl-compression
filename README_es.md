@@ -46,7 +46,7 @@ Trabajo Fin de Grado del Grado en Ingeniería de Tecnologías de Telecomunicaci�
 
 ## Licencia y créditos
 
-Este repositorio es una **obra derivada de [ENERO](https://github.com/BNN-UPC/ENERO)** (Almasan *et al.*, Barcelona Neural Networking Center, UPC), publicada con licencia Apache 2.0, y se distribuye con la misma [licencia](LICENSE). Los cambios respecto al original se resumen en [`NOTICE`](NOTICE). Si utilizas este código, cita el artículo original de ENERO; la referencia está en el [README principal](README.md#acknowledgements-and-license).
+Este repositorio es una **obra derivada de [ENERO](https://github.com/BNN-UPC/ENERO)** (Almasan *et al.*, Barcelona Neural Networking Center, UPC), publicada con licencia Apache 2.0, y se distribuye con la misma [licencia](LICENSE). Los cambios respecto al original se resumen en [`NOTICE`](NOTICE). Si utilizas este código, cita el artículo original de ENERO; la referencia está en el [README principal](README.md#acknowledgements-and-license). Para citar este trabajo, consulta [`CITATION.cff`](CITATION.cff).
 
 ## Contacto
 

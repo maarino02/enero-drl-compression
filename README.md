@@ -88,7 +88,7 @@ enero-drl-compression/
 ├── thesis/                  # LaTeX sources and PDF of the thesis (Spanish)
 ├── docs/img/                # Figures used in this README
 └── code/
-    ├── config.py            # Dataset location (the only line you need to edit)
+    ├── config.py            # Dataset location (or set ENERO_DATASETS)
     ├── gym-graph/           # Gymnasium environments: Env15 (LS), Env16 (original reward), Env17 (fixed reward)
     ├── agent/               # GNN actor and critic
     ├── training/            # PPO training of the base agent
@@ -110,6 +110,8 @@ All the results are included, so the tables and figures can be regenerated **wit
 ## Setup
 
 The code was developed and tested on **Windows with Python 3.10**, CPU only. It should also run on Linux.
+
+**Python 3.10 is required**: `tensorflow-cpu==2.10.0` is not available for newer versions. If you do not have Python 3.10, you can create the environment with conda instead of venv: `conda create -n enero python=3.10` and `conda activate enero`.
 
 ```bash
 python -m venv venv
@@ -168,7 +170,15 @@ python -m evaluation.milp -g EliBackbone -f $D/NEW_EliBackbone/EVALUATE \
 
 Always pass `-out` when you try things: by default the scripts write to `results/`, where the thesis results are stored.
 
+Notes:
+- TensorFlow prints some warnings when it starts; they are normal. In PowerShell 5.1 they may appear in red as `NativeCommandError` if you redirect the output, even though the command succeeds.
+- The MILP over all demands can stop at the time limit on some matrices, so its result may vary very slightly between runs (≈0.03 %) depending on CPU load.
+
 ## Reproducing the full pipeline
+
+> ⚠️ These commands write to `code/models/`, `code/results/` and `code/logs/`, **overwriting the models and results included in the repository** (training also appends to `logs/training_log.txt`, which the thesis figures read). Run them on a separate copy of the repository if you want to keep the originals.
+
+> **PowerShell:** define the topologies as an array and pass it with `@`: `$TOPS = @('-top','BtAsiaPac',"$D/NEW_BtAsiaPac",'-top','Garr199905',"$D/NEW_Garr199905",'-top','Goodnet',"$D/NEW_Goodnet")` and then `python -m compression.prune ... @TOPS ...`. Write the loop of step 3 as `foreach ($T in 'EliBackbone','HurricaneElectric','Janetbackbone') { ... }`.
 
 <details>
 <summary><b>1. Train the base agent</b> (~87 h on a Ryzen 7 4800H CPU)</summary>
